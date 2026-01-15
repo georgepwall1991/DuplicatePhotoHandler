@@ -1,5 +1,6 @@
 //! Trait definitions for perceptual hashing.
 
+use super::fast_decode::FastDecoder;
 use crate::error::HashError;
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
@@ -83,12 +84,13 @@ pub trait HashAlgorithm: Send + Sync {
     /// Compute a hash from an already-loaded image
     fn hash_image(&self, image: &DynamicImage) -> Result<ImageHashValue, HashError>;
 
-    /// Compute a hash directly from a file path
+    /// Compute a hash directly from a file path.
+    ///
+    /// Uses fast decoders for optimal performance:
+    /// - JPEG: zune-jpeg (1.5-2x faster)
+    /// - Other formats: image crate fallback
     fn hash_file(&self, path: &Path) -> Result<ImageHashValue, HashError> {
-        let image = image::open(path).map_err(|e| HashError::DecodeError {
-            path: path.to_path_buf(),
-            reason: e.to_string(),
-        })?;
+        let image = FastDecoder::decode(path)?;
         self.hash_image(&image)
     }
 

@@ -22,6 +22,14 @@ struct HashingResult {
     cache_hits: usize,
 }
 
+/// Result of hashing a single photo
+struct SingleHashResult {
+    path: PathBuf,
+    hash: ImageHashValue,
+    /// Cache entry to save (None if it was a cache hit)
+    cache_entry: Option<CacheEntry>,
+}
+
 /// Calculate duplicate size savings for each group
 fn calculate_group_savings(
     groups: &mut [DuplicateGroup],
@@ -168,7 +176,11 @@ impl Pipeline {
         self.run_with_events(&null_sender())
     }
 
-    /// Hash all photos in parallel, using cache when available
+    /// Hash all photos in parallel, using cache when available.
+    ///
+    /// Uses batch cache writes for better performance:
+    /// - All hashes are computed in parallel
+    /// - Cache entries are collected and written in a single batch transaction
     fn hash_photos(
         &self,
         photos: &[PhotoFile],
@@ -183,7 +195,8 @@ impl Pipeline {
         let completed = AtomicUsize::new(0);
         let events_arc = Arc::new(events.clone());
 
-        let hashes: Vec<(PathBuf, ImageHashValue)> = photos
+        // Process all photos in parallel, collecting results
+        let results: Vec<SingleHashResult> = photos
             .par_iter()
             .filter_map(|photo| {
                 self.hash_single_photo(
@@ -197,13 +210,32 @@ impl Pipeline {
             })
             .collect();
 
+        // Collect cache entries for batch write
+        let cache_entries: Vec<CacheEntry> = results
+            .iter()
+            .filter_map(|r| r.cache_entry.clone())
+            .collect();
+
+        // Batch write all new cache entries (much faster than individual writes)
+        if !cache_entries.is_empty() {
+            let _ = self.cache.set_batch(&cache_entries);
+        }
+
+        // Extract hashes for return
+        let hashes: Vec<(PathBuf, ImageHashValue)> = results
+            .into_iter()
+            .map(|r| (r.path, r.hash))
+            .collect();
+
         Ok(HashingResult {
             hashes,
             cache_hits: cache_hits.load(Ordering::SeqCst),
         })
     }
 
-    /// Hash a single photo, checking cache first
+    /// Hash a single photo, checking cache first.
+    ///
+    /// Returns the hash and optionally a cache entry to be batch-written later.
     fn hash_single_photo(
         &self,
         photo: &PhotoFile,
@@ -212,7 +244,7 @@ impl Pipeline {
         completed: &AtomicUsize,
         total_photos: usize,
         events: &Arc<EventSender>,
-    ) -> Option<(PathBuf, ImageHashValue)> {
+    ) -> Option<SingleHashResult> {
         let current_completed = completed.fetch_add(1, Ordering::SeqCst) + 1;
 
         // Check cache first
@@ -221,24 +253,25 @@ impl Pipeline {
             events.send(Event::Hash(HashEvent::CacheHit {
                 path: photo.path.clone(),
             }));
-            return Some((
-                photo.path.clone(),
-                ImageHashValue::from_bytes(&entry.hash, entry.algorithm),
-            ));
+            return Some(SingleHashResult {
+                path: photo.path.clone(),
+                hash: ImageHashValue::from_bytes(&entry.hash, entry.algorithm),
+                cache_entry: None, // Already in cache
+            });
         }
 
         // Compute hash
         match hasher.hash_file(&photo.path) {
             Ok(hash) => {
-                // Store in cache
-                let _ = self.cache.set(CacheEntry {
+                // Create cache entry (will be batch-written later)
+                let cache_entry = CacheEntry {
                     path: photo.path.clone(),
                     hash: hash.as_bytes().to_vec(),
                     algorithm: self.config.algorithm,
                     file_size: photo.size,
                     file_modified: photo.modified,
                     cached_at: SystemTime::now(),
-                });
+                };
 
                 events.send(Event::Hash(HashEvent::Progress(HashProgress {
                     completed: current_completed,
@@ -247,7 +280,11 @@ impl Pipeline {
                     cache_hits: cache_hits.load(Ordering::SeqCst),
                 })));
 
-                Some((photo.path.clone(), hash))
+                Some(SingleHashResult {
+                    path: photo.path.clone(),
+                    hash,
+                    cache_entry: Some(cache_entry),
+                })
             }
             Err(e) => {
                 events.send(Event::Hash(HashEvent::Error {

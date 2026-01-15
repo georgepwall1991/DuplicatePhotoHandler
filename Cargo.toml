@@ -15,6 +15,13 @@ license = "MIT"
 image = "0.25"
 image_hasher = "3.0.0"
 
+# Fast image decoding (1.5-2x faster than image crate for JPEGs)
+zune-jpeg = "0.4"
+zune-core = "0.4"
+
+# SIMD-accelerated image resizing (5-14x faster)
+fast_image_resize = { version = "5", features = ["image"] }
+
 # EXIF metadata extraction
 kamadak-exif = "0.5"
 

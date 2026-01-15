@@ -7,7 +7,10 @@
 //! 4. For each pixel: if brighter than average, set bit to 1, else 0
 //!
 //! This is the fastest hash but less robust to edits.
+//!
+//! Uses SIMD-accelerated resizing via fast_image_resize for 5-14x speedup.
 
+use super::super::fast_resize::resize_to_grayscale;
 use super::super::traits::{HashAlgorithm, HashAlgorithmKind, ImageHashValue};
 use crate::error::HashError;
 use image::DynamicImage;
@@ -27,15 +30,9 @@ impl AverageHasher {
 
 impl HashAlgorithm for AverageHasher {
     fn hash_image(&self, image: &DynamicImage) -> Result<ImageHashValue, HashError> {
-        // Resize to hash_size x hash_size
-        let resized = image.resize_exact(
-            self.hash_size,
-            self.hash_size,
-            image::imageops::FilterType::Lanczos3,
-        );
-
-        // Convert to grayscale
-        let gray = resized.to_luma8();
+        // Resize to hash_size x hash_size using SIMD-accelerated resizer
+        // This also converts to grayscale (5-14x faster than image crate)
+        let gray = resize_to_grayscale(image, self.hash_size, self.hash_size)?;
 
         // Calculate average brightness
         let total: u64 = gray.pixels().map(|p| p[0] as u64).sum();

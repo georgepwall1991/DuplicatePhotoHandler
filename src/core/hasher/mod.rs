@@ -13,6 +13,10 @@
 //! 3. Compute hash based on pixel relationships
 //! 4. Compare hashes using Hamming distance
 //!
+//! ## Performance Optimizations
+//! - Uses `zune-jpeg` for 1.5-2x faster JPEG decoding
+//! - Uses `fast_image_resize` for 5-14x faster SIMD-accelerated resizing
+//!
 //! ## Example
 //! ```rust,ignore
 //! use duplicate_photo_cleaner::core::hasher::{HasherConfig, HashAlgorithmKind};
@@ -26,6 +30,8 @@
 //! ```
 
 mod algorithms;
+pub mod fast_decode;
+pub mod fast_resize;
 mod traits;
 
 pub use algorithms::{AverageHasher, DifferenceHasher, PerceptualHasher};
