@@ -41,3 +41,9 @@ trash = "5"
 
 # Channels for events
 crossbeam-channel = "0.5"
+
+# Date/time handling
+chrono = "0.4"
+
+# Image dimensions (already in main crate, but needed for dimensions)
+image = "0.25"

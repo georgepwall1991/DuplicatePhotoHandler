@@ -26,3 +26,11 @@ export interface ScanProgress {
   percent: number
   message: string
 }
+
+export interface FileInfo {
+  path: string
+  filename: string
+  size_bytes: number
+  modified: string | null
+  dimensions: [number, number] | null
+}

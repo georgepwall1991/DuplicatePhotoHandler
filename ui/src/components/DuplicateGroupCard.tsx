@@ -58,6 +58,7 @@ interface DuplicateGroupCardProps {
   selectedFiles: Set<string>
   onToggleFile: (path: string) => void
   onPreviewImage?: (path: string) => void
+  onCompare?: (leftPath: string, rightPath: string) => void
   isFocused?: boolean
   isExpanded?: boolean
   onToggleExpand?: () => void
@@ -98,6 +99,7 @@ export function DuplicateGroupCard({
   selectedFiles,
   onToggleFile,
   onPreviewImage,
+  onCompare,
   isFocused,
   isExpanded: externalExpanded,
   onToggleExpand,
@@ -253,18 +255,28 @@ export function DuplicateGroupCard({
             <span className="text-sm text-gray-500">
               <span className="text-green-400">★</span> marks the recommended photo to keep
             </span>
-            <button
-              onClick={() => {
-                group.photos.forEach((photo) => {
-                  if (photo !== group.representative && !selectedFiles.has(photo)) {
-                    onToggleFile(photo)
-                  }
-                })
-              }}
-              className="text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
-            >
-              Select all duplicates
-            </button>
+            <div className="flex items-center gap-4">
+              {group.photos.length >= 2 && onCompare && (
+                <button
+                  onClick={() => onCompare(group.representative, group.photos.find(p => p !== group.representative)!)}
+                  className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Compare
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  group.photos.forEach((photo) => {
+                    if (photo !== group.representative && !selectedFiles.has(photo)) {
+                      onToggleFile(photo)
+                    }
+                  })
+                }}
+                className="text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                Select all duplicates
+              </button>
+            </div>
           </div>
         </div>
       )}

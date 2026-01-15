@@ -220,6 +220,50 @@ pub struct TrashResult {
     pub errors: Vec<String>,
 }
 
+/// File information for comparison view
+#[derive(Debug, Serialize)]
+pub struct FileInfo {
+    pub path: String,
+    pub filename: String,
+    pub size_bytes: u64,
+    pub modified: Option<String>,
+    pub dimensions: Option<(u32, u32)>,
+}
+
+/// Get file information for comparison
+#[tauri::command]
+pub async fn get_file_info(path: String) -> Result<FileInfo, String> {
+    let path_buf = PathBuf::from(&path);
+
+    if !path_buf.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+
+    let metadata = std::fs::metadata(&path_buf).map_err(|e| e.to_string())?;
+
+    let filename = path_buf
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Unknown")
+        .to_string();
+
+    let modified = metadata.modified().ok().map(|time| {
+        let datetime: chrono::DateTime<chrono::Local> = time.into();
+        datetime.format("%Y-%m-%d %H:%M").to_string()
+    });
+
+    // Try to get image dimensions
+    let dimensions = image::image_dimensions(&path_buf).ok();
+
+    Ok(FileInfo {
+        path,
+        filename,
+        size_bytes: metadata.len(),
+        modified,
+        dimensions,
+    })
+}
+
 /// Move files to trash
 #[tauri::command]
 pub async fn trash_files(paths: Vec<String>) -> Result<TrashResult, String> {

@@ -3233,8 +3233,10 @@ dependencies = [
 name = "photo-dedup-app"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "crossbeam-channel",
  "duplicate-photo-cleaner",
+ "image",
  "log",
  "serde",
  "serde_json",

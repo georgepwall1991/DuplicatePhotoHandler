@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '../lib/tauri'
 
-import type { ScanResult } from '../lib/types'
+import type { ScanResult, FileInfo } from '../lib/types'
 import { DuplicateGroupCard } from './DuplicateGroupCard'
 import { ImagePreview } from './ImagePreview'
-import { ResultsHeader, type SortOption, type FilterOption } from './ResultsHeader'
+import { ComparisonView } from './ComparisonView'
+import { ResultsHeader, type SortOption, type FilterOption, type SelectionStrategy } from './ResultsHeader'
 import { ResultsSummary } from './ResultsSummary'
 import { ActionBar } from './ActionBar'
 import { ConfirmModal } from './ConfirmModal'
@@ -16,13 +17,47 @@ interface ResultsViewProps {
   onNewScan: () => void
 }
 
+// Convert glob pattern to regex (supports *, ?)
+const globToRegex = (pattern: string): RegExp => {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // Escape special chars except * and ?
+    .replace(/\*/g, '.*')                    // * matches anything
+    .replace(/\?/g, '.')                     // ? matches single char
+  return new RegExp(escaped, 'i')
+}
+
+// Check if any filename in the group matches the search term
+const groupMatchesSearch = (group: { photos: string[] }, searchTerm: string): boolean => {
+  if (!searchTerm.trim()) return true
+
+  // Check if it looks like a glob pattern
+  const isGlob = searchTerm.includes('*') || searchTerm.includes('?')
+
+  if (isGlob) {
+    const regex = globToRegex(searchTerm)
+    return group.photos.some(path => {
+      const filename = path.split('/').pop() || path
+      return regex.test(filename)
+    })
+  }
+
+  // Simple case-insensitive substring match
+  const lowerSearch = searchTerm.toLowerCase()
+  return group.photos.some(path => {
+    const filename = path.split('/').pop() || path
+    return filename.toLowerCase().includes(lowerSearch)
+  })
+}
+
 export function ResultsView({ results, onNewScan }: ResultsViewProps) {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [comparison, setComparison] = useState<{ left: string; right: string } | null>(null)
   const [sortBy, setSortBy] = useState<SortOption>('size')
   const [filterBy, setFilterBy] = useState<FilterOption>('all')
+  const [searchTerm, setSearchTerm] = useState('')
   const [showErrors, setShowErrors] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -32,10 +67,14 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
   // Sort and filter groups
   const filteredAndSortedGroups = results.groups
     .filter(group => {
-      if (filterBy === 'all') return true
-      if (filterBy === 'exact') return group.match_type.includes('Exact') && !group.match_type.includes('NearExact')
-      if (filterBy === 'near') return group.match_type.includes('NearExact')
-      if (filterBy === 'similar') return group.match_type.includes('Similar')
+      // Filter by match type
+      if (filterBy === 'exact' && !(group.match_type.includes('Exact') && !group.match_type.includes('NearExact'))) return false
+      if (filterBy === 'near' && !group.match_type.includes('NearExact')) return false
+      if (filterBy === 'similar' && !group.match_type.includes('Similar')) return false
+
+      // Filter by search term
+      if (!groupMatchesSearch(group, searchTerm)) return false
+
       return true
     })
     .sort((a, b) => {
@@ -50,18 +89,82 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       return 0
     })
 
-  // Auto-select duplicates (not the representative)
-  const autoSelectDuplicates = useCallback(() => {
-    const duplicates = new Set<string>()
-    results.groups.forEach((group) => {
-      group.photos.forEach((photo) => {
-        if (photo !== group.representative) {
-          duplicates.add(photo)
-        }
+  // Smart selection based on strategy
+  const handleSmartSelect = useCallback(async (strategy: SelectionStrategy) => {
+    if (strategy === 'duplicates') {
+      // Original behavior: select all duplicates (not the representative)
+      const duplicates = new Set<string>()
+      results.groups.forEach((group) => {
+        group.photos.forEach((photo) => {
+          if (photo !== group.representative) {
+            duplicates.add(photo)
+          }
+        })
       })
-    })
-    setSelectedFiles(duplicates)
-    showToast(`Selected ${duplicates.size} duplicate files`, 'info')
+      setSelectedFiles(duplicates)
+      showToast(`Selected ${duplicates.size} duplicate files`, 'info')
+      return
+    }
+
+    // For other strategies, we need file info
+    showToast('Analyzing photos...', 'info')
+
+    const toDelete = new Set<string>()
+
+    for (const group of results.groups) {
+      if (group.photos.length < 2) continue
+
+      try {
+        // Fetch info for all photos in the group
+        const infos = await Promise.all(
+          group.photos.map(path => invoke<FileInfo>('get_file_info', { path }))
+        )
+
+        // Find the "best" photo based on strategy
+        let bestIdx = 0
+        for (let i = 1; i < infos.length; i++) {
+          const current = infos[i]
+          const best = infos[bestIdx]
+
+          if (strategy === 'keepHighestRes') {
+            const currentPixels = current.dimensions ? current.dimensions[0] * current.dimensions[1] : 0
+            const bestPixels = best.dimensions ? best.dimensions[0] * best.dimensions[1] : 0
+            if (currentPixels > bestPixels) bestIdx = i
+          } else if (strategy === 'keepLargest') {
+            if (current.size_bytes > best.size_bytes) bestIdx = i
+          } else if (strategy === 'keepOldest') {
+            if (current.modified && best.modified && current.modified < best.modified) bestIdx = i
+          } else if (strategy === 'keepMostRecent') {
+            if (current.modified && best.modified && current.modified > best.modified) bestIdx = i
+          }
+        }
+
+        // Select all except the best for deletion
+        infos.forEach((info, idx) => {
+          if (idx !== bestIdx) {
+            toDelete.add(info.path)
+          }
+        })
+      } catch (error) {
+        console.error('Failed to get file info for group:', error)
+        // Fall back to selecting all except representative
+        group.photos.forEach(photo => {
+          if (photo !== group.representative) {
+            toDelete.add(photo)
+          }
+        })
+      }
+    }
+
+    setSelectedFiles(toDelete)
+    const strategyNames: Record<SelectionStrategy, string> = {
+      duplicates: 'duplicates',
+      keepHighestRes: 'lower resolution',
+      keepLargest: 'smaller',
+      keepOldest: 'newer',
+      keepMostRecent: 'older',
+    }
+    showToast(`Selected ${toDelete.size} ${strategyNames[strategy]} files for deletion`, 'info')
   }, [results.groups, showToast])
 
   const clearSelection = useCallback(() => {
@@ -127,11 +230,16 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     })
   }, [])
 
+  // Open comparison view
+  const handleCompare = useCallback((leftPath: string, rightPath: string) => {
+    setComparison({ left: leftPath, right: rightPath })
+  }, [])
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle if modal is open or user is typing in an input
-      if (showConfirm || previewImage || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (showConfirm || previewImage || comparison || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
 
@@ -142,7 +250,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
         case 'a':
           // Select all duplicates
           e.preventDefault()
-          autoSelectDuplicates()
+          handleSmartSelect('duplicates')
           break
 
         case 'd':
@@ -207,7 +315,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [filteredAndSortedGroups, focusedIndex, selectedFiles.size, showConfirm, previewImage, autoSelectDuplicates, clearSelection, toggleGroupExpanded])
+  }, [filteredAndSortedGroups, focusedIndex, selectedFiles.size, showConfirm, previewImage, comparison, handleSmartSelect, clearSelection, toggleGroupExpanded])
 
   // Scroll focused group into view
   useEffect(() => {
@@ -241,6 +349,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
               selectedFiles={selectedFiles}
               onToggleFile={toggleFile}
               onPreviewImage={setPreviewImage}
+              onCompare={handleCompare}
               isFocused={focusedIndex === index}
               isExpanded={expandedGroups.has(group.id)}
               onToggleExpand={() => toggleGroupExpanded(group.id)}
@@ -260,10 +369,12 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
         filterBy={filterBy}
         filteredCount={filteredAndSortedGroups.length}
         showErrors={showErrors}
+        searchTerm={searchTerm}
         onSortChange={setSortBy}
         onFilterChange={setFilterBy}
+        onSearchChange={setSearchTerm}
         onToggleErrors={() => setShowErrors(!showErrors)}
-        onAutoSelect={autoSelectDuplicates}
+        onAutoSelect={handleSmartSelect}
         onClearSelection={clearSelection}
         onNewScan={onNewScan}
         hasSelection={selectedFiles.size > 0}
@@ -317,6 +428,42 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
         isSelected={previewImage ? selectedFiles.has(previewImage) : undefined}
         onDelete={previewImage ? () => toggleFile(previewImage) : undefined}
       />
+
+      {/* Comparison View Modal */}
+      {comparison && (
+        <ComparisonView
+          leftPath={comparison.left}
+          rightPath={comparison.right}
+          onClose={() => setComparison(null)}
+          onKeepLeft={() => {
+            // Select right (non-kept) for deletion
+            if (!selectedFiles.has(comparison.right)) {
+              toggleFile(comparison.right)
+            }
+            setComparison(null)
+            showToast('Selected Photo B for deletion', 'info')
+          }}
+          onKeepRight={() => {
+            // Select left (non-kept) for deletion
+            if (!selectedFiles.has(comparison.left)) {
+              toggleFile(comparison.left)
+            }
+            setComparison(null)
+            showToast('Selected Photo A for deletion', 'info')
+          }}
+          onKeepBoth={() => {
+            // Deselect both if selected
+            if (selectedFiles.has(comparison.left)) {
+              toggleFile(comparison.left)
+            }
+            if (selectedFiles.has(comparison.right)) {
+              toggleFile(comparison.right)
+            }
+            setComparison(null)
+            showToast('Keeping both photos', 'info')
+          }}
+        />
+      )}
     </div>
   )
 }
