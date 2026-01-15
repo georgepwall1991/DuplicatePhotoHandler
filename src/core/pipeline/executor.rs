@@ -2,8 +2,8 @@
 
 use crate::core::cache::{CacheBackend, CacheEntry, InMemoryCache};
 use crate::core::comparator::{find_duplicate_pairs, DuplicateGroup, ThresholdStrategy, TransitiveGrouper};
-use crate::core::hasher::{HashAlgorithmKind, HasherConfig, ImageHashValue, PerceptualHash};
-use crate::core::scanner::{PhotoScanner, ScanConfig, WalkDirScanner};
+use crate::core::hasher::{HashAlgorithm, HashAlgorithmKind, HasherConfig, ImageHashValue, PerceptualHash};
+use crate::core::scanner::{PhotoFile, PhotoScanner, ScanConfig, WalkDirScanner};
 use crate::error::DuplicateFinderError;
 use crate::events::{
     CompareEvent, Event, EventSender, HashEvent, HashProgress, PipelineEvent,
@@ -16,8 +16,38 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
+/// Result of the hashing phase
+struct HashingResult {
+    hashes: Vec<(PathBuf, ImageHashValue)>,
+    cache_hits: usize,
+}
+
+/// Calculate duplicate size savings for each group
+fn calculate_group_savings(
+    groups: &mut [DuplicateGroup],
+    photos: &[PhotoFile],
+) -> u64 {
+    let photo_sizes: HashMap<_, _> = photos
+        .iter()
+        .map(|p| (p.path.clone(), p.size))
+        .collect();
+
+    let mut total_savings = 0u64;
+    for group in groups.iter_mut() {
+        let duplicate_size: u64 = group
+            .photos
+            .iter()
+            .filter(|p| *p != &group.representative)
+            .filter_map(|p| photo_sizes.get(p))
+            .sum();
+        group.duplicate_size_bytes = duplicate_size;
+        total_savings += duplicate_size;
+    }
+    total_savings
+}
+
 /// Result of pipeline execution
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipelineResult {
     /// All duplicate groups found
     pub groups: Vec<DuplicateGroup>,
@@ -138,6 +168,97 @@ impl Pipeline {
         self.run_with_events(&null_sender())
     }
 
+    /// Hash all photos in parallel, using cache when available
+    fn hash_photos(
+        &self,
+        photos: &[PhotoFile],
+        events: &EventSender,
+    ) -> Result<HashingResult, DuplicateFinderError> {
+        let total_photos = photos.len();
+        let hasher = HasherConfig::new()
+            .algorithm(self.config.algorithm)
+            .build()?;
+
+        let cache_hits = AtomicUsize::new(0);
+        let completed = AtomicUsize::new(0);
+        let events_arc = Arc::new(events.clone());
+
+        let hashes: Vec<(PathBuf, ImageHashValue)> = photos
+            .par_iter()
+            .filter_map(|photo| {
+                self.hash_single_photo(
+                    photo,
+                    hasher.as_ref(),
+                    &cache_hits,
+                    &completed,
+                    total_photos,
+                    &events_arc,
+                )
+            })
+            .collect();
+
+        Ok(HashingResult {
+            hashes,
+            cache_hits: cache_hits.load(Ordering::SeqCst),
+        })
+    }
+
+    /// Hash a single photo, checking cache first
+    fn hash_single_photo(
+        &self,
+        photo: &PhotoFile,
+        hasher: &dyn HashAlgorithm,
+        cache_hits: &AtomicUsize,
+        completed: &AtomicUsize,
+        total_photos: usize,
+        events: &Arc<EventSender>,
+    ) -> Option<(PathBuf, ImageHashValue)> {
+        let current_completed = completed.fetch_add(1, Ordering::SeqCst) + 1;
+
+        // Check cache first
+        if let Ok(Some(entry)) = self.cache.get(&photo.path, photo.size, photo.modified) {
+            cache_hits.fetch_add(1, Ordering::SeqCst);
+            events.send(Event::Hash(HashEvent::CacheHit {
+                path: photo.path.clone(),
+            }));
+            return Some((
+                photo.path.clone(),
+                ImageHashValue::from_bytes(&entry.hash, entry.algorithm),
+            ));
+        }
+
+        // Compute hash
+        match hasher.hash_file(&photo.path) {
+            Ok(hash) => {
+                // Store in cache
+                let _ = self.cache.set(CacheEntry {
+                    path: photo.path.clone(),
+                    hash: hash.as_bytes().to_vec(),
+                    algorithm: self.config.algorithm,
+                    file_size: photo.size,
+                    file_modified: photo.modified,
+                    cached_at: SystemTime::now(),
+                });
+
+                events.send(Event::Hash(HashEvent::Progress(HashProgress {
+                    completed: current_completed,
+                    total: total_photos,
+                    current_path: photo.path.clone(),
+                    cache_hits: cache_hits.load(Ordering::SeqCst),
+                })));
+
+                Some((photo.path.clone(), hash))
+            }
+            Err(e) => {
+                events.send(Event::Hash(HashEvent::Error {
+                    path: photo.path.clone(),
+                    message: e.to_string(),
+                }));
+                None
+            }
+        }
+    }
+
     /// Run the pipeline with event reporting
     pub fn run_with_events(
         &self,
@@ -164,170 +285,89 @@ impl Pipeline {
         let total_photos = photos.len();
 
         if photos.is_empty() {
-            events.send(Event::Pipeline(PipelineEvent::Completed {
-                summary: PipelineSummary {
-                    total_photos: 0,
-                    duplicate_groups: 0,
-                    duplicate_count: 0,
-                    potential_savings_bytes: 0,
-                    duration_ms: start_time.elapsed().as_millis() as u64,
-                },
-            }));
-
-            return Ok(PipelineResult {
-                groups: Vec::new(),
-                total_photos: 0,
-                cache_hits: 0,
-                errors,
-                duration_ms: start_time.elapsed().as_millis() as u64,
-            });
+            return Ok(self.empty_result(events, start_time, errors));
         }
 
         // Phase 2: Hashing
         events.send(Event::Pipeline(PipelineEvent::PhaseChanged {
             phase: PipelinePhase::Hashing,
         }));
+        events.send(Event::Hash(HashEvent::Started { total_photos }));
 
-        events.send(Event::Hash(HashEvent::Started {
-            total_photos: photos.len(),
-        }));
-
-        let hasher = HasherConfig::new()
-            .algorithm(self.config.algorithm)
-            .build()?;
-
-        let cache_hits = AtomicUsize::new(0);
-        let completed = AtomicUsize::new(0);
-        let events_arc = Arc::new(events.clone());
-
-        // Hash photos in parallel
-        let hashes: Vec<(PathBuf, ImageHashValue)> = photos
-            .par_iter()
-            .filter_map(|photo| {
-                let current_completed = completed.fetch_add(1, Ordering::SeqCst) + 1;
-
-                // Check cache first
-                if let Ok(Some(entry)) = self.cache.get(
-                    &photo.path,
-                    photo.size,
-                    photo.modified,
-                ) {
-                    cache_hits.fetch_add(1, Ordering::SeqCst);
-                    events_arc.send(Event::Hash(HashEvent::CacheHit {
-                        path: photo.path.clone(),
-                    }));
-
-                    return Some((
-                        photo.path.clone(),
-                        ImageHashValue::from_bytes(&entry.hash, entry.algorithm),
-                    ));
-                }
-
-                // Compute hash
-                match hasher.hash_file(&photo.path) {
-                    Ok(hash) => {
-                        // Store in cache
-                        let _ = self.cache.set(CacheEntry {
-                            path: photo.path.clone(),
-                            hash: hash.as_bytes().to_vec(),
-                            algorithm: self.config.algorithm,
-                            file_size: photo.size,
-                            file_modified: photo.modified,
-                            cached_at: SystemTime::now(),
-                        });
-
-                        events_arc.send(Event::Hash(HashEvent::Progress(HashProgress {
-                            completed: current_completed,
-                            total: total_photos,
-                            current_path: photo.path.clone(),
-                            cache_hits: cache_hits.load(Ordering::SeqCst),
-                        })));
-
-                        Some((photo.path.clone(), hash))
-                    }
-                    Err(e) => {
-                        events_arc.send(Event::Hash(HashEvent::Error {
-                            path: photo.path.clone(),
-                            message: e.to_string(),
-                        }));
-                        None
-                    }
-                }
-            })
-            .collect();
-
-        let total_cache_hits = cache_hits.load(Ordering::SeqCst);
+        let hash_result = self.hash_photos(&photos, events)?;
 
         events.send(Event::Hash(HashEvent::Completed {
-            total_hashed: hashes.len(),
-            cache_hits: total_cache_hits,
+            total_hashed: hash_result.hashes.len(),
+            cache_hits: hash_result.cache_hits,
         }));
 
         // Phase 3: Comparing
         events.send(Event::Pipeline(PipelineEvent::PhaseChanged {
             phase: PipelinePhase::Comparing,
         }));
-
         events.send(Event::Compare(CompareEvent::Started {
-            total_photos: hashes.len(),
+            total_photos: hash_result.hashes.len(),
         }));
 
         let strategy = ThresholdStrategy::new(self.config.threshold);
-        let matches = find_duplicate_pairs(&hashes, &strategy);
+        let matches = find_duplicate_pairs(&hash_result.hashes, &strategy);
 
-        // Group into clusters
         let grouper = TransitiveGrouper::new();
-        let groups = grouper.group(&matches);
+        let mut groups = grouper.group(&matches);
 
         events.send(Event::Compare(CompareEvent::Completed {
             total_groups: groups.len(),
             total_duplicates: groups.iter().map(|g| g.duplicate_count()).sum(),
         }));
 
-        // Calculate potential savings
-        let photo_sizes: HashMap<_, _> = photos
-            .iter()
-            .map(|p| (p.path.clone(), p.size))
-            .collect();
-
-        let mut groups_with_sizes = groups;
-        for group in &mut groups_with_sizes {
-            let total_size: u64 = group
-                .photos
-                .iter()
-                .filter(|p| *p != &group.representative)
-                .filter_map(|p| photo_sizes.get(p))
-                .sum();
-            group.duplicate_size_bytes = total_size;
-        }
-
-        let potential_savings: u64 = groups_with_sizes
-            .iter()
-            .map(|g| g.duplicate_size_bytes)
-            .sum();
-
+        // Calculate savings and emit summary
+        let potential_savings = calculate_group_savings(&mut groups, &photos);
         let duration_ms = start_time.elapsed().as_millis() as u64;
 
         events.send(Event::Pipeline(PipelineEvent::Completed {
             summary: PipelineSummary {
                 total_photos,
-                duplicate_groups: groups_with_sizes.len(),
-                duplicate_count: groups_with_sizes
-                    .iter()
-                    .map(|g| g.duplicate_count())
-                    .sum(),
+                duplicate_groups: groups.len(),
+                duplicate_count: groups.iter().map(|g| g.duplicate_count()).sum(),
                 potential_savings_bytes: potential_savings,
                 duration_ms,
             },
         }));
 
         Ok(PipelineResult {
-            groups: groups_with_sizes,
+            groups,
             total_photos,
-            cache_hits: total_cache_hits,
+            cache_hits: hash_result.cache_hits,
             errors,
             duration_ms,
         })
+    }
+
+    /// Build an empty result for when no photos are found
+    fn empty_result(
+        &self,
+        events: &EventSender,
+        start_time: Instant,
+        errors: Vec<String>,
+    ) -> PipelineResult {
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+        events.send(Event::Pipeline(PipelineEvent::Completed {
+            summary: PipelineSummary {
+                total_photos: 0,
+                duplicate_groups: 0,
+                duplicate_count: 0,
+                potential_savings_bytes: 0,
+                duration_ms,
+            },
+        }));
+
+        PipelineResult {
+            groups: Vec::new(),
+            total_photos: 0,
+            cache_hits: 0,
+            errors,
+            duration_ms,
+        }
     }
 }
 
@@ -417,5 +457,101 @@ mod tests {
         // Note: We can't easily test cache hits without more infrastructure
         // because the cache is moved into the pipeline
         assert!(result1.total_photos <= 1);
+    }
+
+    #[test]
+    fn pipeline_handles_corrupt_image_gracefully() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a corrupt "image" file with invalid data
+        let corrupt_path = temp_dir.path().join("corrupt.jpg");
+        let mut file = File::create(&corrupt_path).unwrap();
+        file.write_all(b"this is not a valid image file").unwrap();
+        drop(file);
+
+        let pipeline = Pipeline::builder()
+            .paths(vec![temp_dir.path().to_path_buf()])
+            .build();
+
+        // Should not panic, should complete with errors recorded
+        let result = pipeline.run().unwrap();
+
+        // The corrupt file may be skipped during scanning or hashing
+        // Either way, it should not cause a panic
+        assert!(result.total_photos <= 1);
+    }
+
+    #[test]
+    fn pipeline_handles_nonexistent_path() {
+        let pipeline = Pipeline::builder()
+            .paths(vec![PathBuf::from("/nonexistent/path/that/does/not/exist")])
+            .build();
+
+        // Should not panic
+        let result = pipeline.run().unwrap();
+
+        assert_eq!(result.total_photos, 0);
+        assert_eq!(result.groups.len(), 0);
+    }
+
+    #[test]
+    fn pipeline_with_events_emits_started_event() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let pipeline = Pipeline::builder()
+            .paths(vec![temp_dir.path().to_path_buf()])
+            .build();
+
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        let event_sender = crate::events::EventSender::new(sender);
+
+        let _ = pipeline.run_with_events(&event_sender);
+
+        // Check that we received a Started event
+        let mut found_started = false;
+        while let Ok(event) = receiver.try_recv() {
+            if let Event::Pipeline(PipelineEvent::Started) = event {
+                found_started = true;
+                break;
+            }
+        }
+        assert!(found_started, "Expected Pipeline::Started event");
+    }
+
+    #[test]
+    fn calculate_group_savings_computes_correctly() {
+        use crate::core::comparator::{DuplicateGroup, MatchType};
+        use crate::core::scanner::ImageFormat;
+
+        let photos = vec![
+            PhotoFile {
+                path: PathBuf::from("/a.jpg"),
+                size: 1000,
+                modified: std::time::SystemTime::now(),
+                format: ImageFormat::Jpeg,
+            },
+            PhotoFile {
+                path: PathBuf::from("/b.jpg"),
+                size: 1000,
+                modified: std::time::SystemTime::now(),
+                format: ImageFormat::Jpeg,
+            },
+        ];
+
+        let mut groups = vec![DuplicateGroup {
+            id: uuid::Uuid::new_v4(),
+            photos: vec![PathBuf::from("/a.jpg"), PathBuf::from("/b.jpg")],
+            representative: PathBuf::from("/a.jpg"),
+            match_type: MatchType::Exact,
+            average_distance: 0.0,
+            duplicate_size_bytes: 0, // Will be calculated
+        }];
+
+        let savings = calculate_group_savings(&mut groups, &photos);
+
+        // Should calculate savings as size of duplicates (not representative)
+        // In a group of 2 identical files of 1000 bytes, savings = 1000 bytes (one duplicate)
+        assert_eq!(savings, 1000);
+        assert_eq!(groups[0].duplicate_size_bytes, 1000);
     }
 }

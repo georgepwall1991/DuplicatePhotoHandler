@@ -1,0 +1,43 @@
+[package]
+name = "photo-dedup-app"
+version = "0.1.0"
+description = "A trustworthy duplicate photo finder"
+authors = ["George Wall"]
+license = "MIT"
+repository = "https://github.com/georgepwall1991/DuplicatePhotoHandler"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.3", features = [] }
+
+[dependencies]
+# Tauri
+tauri = { version = "2.9.5", features = ["protocol-asset"] }
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
+
+# Serialization
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+
+# Logging
+log = "0.4"
+
+# Async
+tokio = { version = "1", features = ["sync"] }
+
+# Our duplicate detection library
+duplicate-photo-cleaner = { path = ".." }
+
+# Trash files (move to recycle bin)
+trash = "5"
+
+# Channels for events
+crossbeam-channel = "0.5"

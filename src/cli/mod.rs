@@ -241,124 +241,117 @@ fn run_scan(
     Ok(())
 }
 
-fn print_pretty_results(
-    term: &Term,
-    result: &PipelineResult,
+/// Formats results for pretty terminal output
+struct PrettyFormatter<'a> {
+    term: &'a Term,
     verbose: bool,
-) {
-    term.write_line("").ok();
-    term.write_line(&format!(
-        "{} Scan Complete",
-        style("✓").green().bold()
-    ))
-    .ok();
-    term.write_line("").ok();
+}
 
-    // Summary
-    term.write_line(&format!(
-        "  {} photos scanned in {:.1}s",
-        style(result.total_photos).cyan(),
-        result.duration_ms as f64 / 1000.0
-    ))
-    .ok();
-
-    term.write_line(&format!(
-        "  {} duplicate groups found",
-        style(result.groups.len()).cyan()
-    ))
-    .ok();
-
-    let duplicate_count: usize = result.groups.iter().map(|g| g.duplicate_count()).sum();
-    term.write_line(&format!(
-        "  {} duplicate photos",
-        style(duplicate_count).cyan()
-    ))
-    .ok();
-
-    let savings: u64 = result.groups.iter().map(|g| g.duplicate_size_bytes).sum();
-    term.write_line(&format!(
-        "  {} potential space savings",
-        style(format_bytes(savings)).yellow()
-    ))
-    .ok();
-
-    if result.cache_hits > 0 {
-        term.write_line(&format!(
-            "  {} cache hits",
-            style(result.cache_hits).dim()
-        ))
-        .ok();
+impl<'a> PrettyFormatter<'a> {
+    fn new(term: &'a Term, verbose: bool) -> Self {
+        Self { term, verbose }
     }
 
-    term.write_line("").ok();
+    fn write(&self, line: &str) {
+        self.term.write_line(line).ok();
+    }
 
-    // Show groups
-    if result.groups.is_empty() {
-        term.write_line(&format!(
-            "  {} No duplicates found!",
-            style("🎉").green()
-        ))
-        .ok();
-    } else {
-        term.write_line(&format!(
-            "{}",
-            style("Duplicate Groups:").bold().underlined()
-        ))
-        .ok();
-        term.write_line("").ok();
+    fn print_header(&self) {
+        self.write("");
+        self.write(&format!("{} Scan Complete", style("✓").green().bold()));
+        self.write("");
+    }
+
+    fn print_summary(&self, result: &PipelineResult) {
+        let duplicate_count: usize = result.groups.iter().map(|g| g.duplicate_count()).sum();
+        let savings: u64 = result.groups.iter().map(|g| g.duplicate_size_bytes).sum();
+
+        self.write(&format!(
+            "  {} photos scanned in {:.1}s",
+            style(result.total_photos).cyan(),
+            result.duration_ms as f64 / 1000.0
+        ));
+        self.write(&format!(
+            "  {} duplicate groups found",
+            style(result.groups.len()).cyan()
+        ));
+        self.write(&format!("  {} duplicate photos", style(duplicate_count).cyan()));
+        self.write(&format!(
+            "  {} potential space savings",
+            style(format_bytes(savings)).yellow()
+        ));
+
+        if result.cache_hits > 0 {
+            self.write(&format!("  {} cache hits", style(result.cache_hits).dim()));
+        }
+        self.write("");
+    }
+
+    fn print_group(&self, index: usize, group: &duplicate_photo_cleaner::core::comparator::DuplicateGroup) {
+        self.write(&format!(
+            "  {} {} ({} photos, {})",
+            style(format!("Group {}:", index + 1)).bold(),
+            style(format!("{}", group.match_type)).yellow(),
+            group.photos.len(),
+            format_bytes(group.duplicate_size_bytes)
+        ));
+
+        for photo in &group.photos {
+            let marker = if photo == &group.representative {
+                style("★").green().to_string()
+            } else {
+                style("○").dim().to_string()
+            };
+            self.write(&format!("    {} {}", marker, format_path(photo)));
+        }
+
+        if self.verbose && group.photos.len() > 1 {
+            self.write(&format!(
+                "    {} {}",
+                style("Recommended:").dim(),
+                style("Keep the starred (★) photo").dim()
+            ));
+        }
+        self.write("");
+    }
+
+    fn print_groups(&self, result: &PipelineResult) {
+        if result.groups.is_empty() {
+            self.write(&format!("  {} No duplicates found!", style("🎉").green()));
+            return;
+        }
+
+        self.write(&format!("{}", style("Duplicate Groups:").bold().underlined()));
+        self.write("");
 
         for (i, group) in result.groups.iter().enumerate() {
-            term.write_line(&format!(
-                "  {} {} ({} photos, {})",
-                style(format!("Group {}:", i + 1)).bold(),
-                style(format!("{}", group.match_type)).yellow(),
-                group.photos.len(),
-                format_bytes(group.duplicate_size_bytes)
-            ))
-            .ok();
-
-            for (_idx, photo) in group.photos.iter().enumerate() {
-                let marker = if photo == &group.representative {
-                    style("★").green().to_string()
-                } else {
-                    style("○").dim().to_string()
-                };
-
-                let display_path = if photo.starts_with(dirs::home_dir().unwrap_or_default()) {
-                    format!(
-                        "~/{}",
-                        photo
-                            .strip_prefix(dirs::home_dir().unwrap_or_default())
-                            .unwrap()
-                            .display()
-                    )
-                } else {
-                    photo.display().to_string()
-                };
-
-                term.write_line(&format!("    {} {}", marker, display_path))
-                    .ok();
-            }
-
-            if verbose && group.photos.len() > 1 {
-                term.write_line(&format!(
-                    "    {} {}",
-                    style("Recommended:").dim(),
-                    style("Keep the starred (★) photo").dim()
-                ))
-                .ok();
-            }
-
-            term.write_line("").ok();
+            self.print_group(i, group);
         }
     }
 
-    // Footer
-    term.write_line(&format!(
-        "{}",
-        style("Remember: No files were deleted. Review carefully before taking action.").dim()
-    ))
-    .ok();
+    fn print_footer(&self) {
+        self.write(&format!(
+            "{}",
+            style("Remember: No files were deleted. Review carefully before taking action.").dim()
+        ));
+    }
+}
+
+fn format_path(path: &PathBuf) -> String {
+    let home = dirs::home_dir().unwrap_or_default();
+    if path.starts_with(&home) {
+        format!("~/{}", path.strip_prefix(&home).unwrap().display())
+    } else {
+        path.display().to_string()
+    }
+}
+
+fn print_pretty_results(term: &Term, result: &PipelineResult, verbose: bool) {
+    let formatter = PrettyFormatter::new(term, verbose);
+    formatter.print_header();
+    formatter.print_summary(result);
+    formatter.print_groups(result);
+    formatter.print_footer();
 }
 
 fn print_json_results(result: &PipelineResult) {
