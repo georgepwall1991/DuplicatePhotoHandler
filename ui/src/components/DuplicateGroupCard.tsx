@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { convertFileSrc } from '../lib/tauri'
 
-import type { DuplicateGroup } from '../App'
+import type { DuplicateGroup } from '../lib/types'
 
 // Image thumbnail component with loading and error states
 function ImageThumbnail({
@@ -17,6 +17,12 @@ function ImageThumbnail({
 }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
+
+  // Reset state when src changes (fixes stale state when reusing component)
+  useEffect(() => {
+    setLoaded(false)
+    setError(false)
+  }, [src])
 
   const assetUrl = convertFileSrc(src)
 

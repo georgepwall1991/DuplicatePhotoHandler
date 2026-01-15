@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { invoke } from '../lib/tauri'
 
-import type { ScanResult } from '../App'
+import type { ScanResult } from '../lib/types'
 import { ScanButton } from './ScanButton'
 import { ScanProgress } from './ScanProgress'
 import { FolderSelector } from './FolderSelector'

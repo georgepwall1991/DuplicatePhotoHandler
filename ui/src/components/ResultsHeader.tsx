@@ -1,4 +1,4 @@
-import type { ScanResult } from '../App'
+import type { ScanResult } from '../lib/types'
 
 type SortOption = 'size' | 'photos' | 'type'
 type FilterOption = 'all' | 'exact' | 'near' | 'similar'

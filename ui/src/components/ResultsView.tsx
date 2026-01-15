@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '../lib/tauri'
 
-import type { ScanResult } from '../App'
+import type { ScanResult } from '../lib/types'
 import { DuplicateGroupCard } from './DuplicateGroupCard'
 import { ImagePreview } from './ImagePreview'
 import { ResultsHeader, type SortOption, type FilterOption } from './ResultsHeader'
@@ -84,10 +84,15 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
 
     setIsDeleting(true)
     try {
-      const trashed = await invoke<number>('trash_files', {
+      const result = await invoke<{ trashed: number; errors: string[] }>('trash_files', {
         paths: Array.from(selectedFiles),
       })
-      showToast(`Moved ${trashed} files to Trash`, 'success')
+      if (result.errors.length > 0) {
+        showToast(`Moved ${result.trashed} files to Trash (${result.errors.length} failed)`, 'warning')
+        console.warn('Trash errors:', result.errors)
+      } else {
+        showToast(`Moved ${result.trashed} files to Trash`, 'success')
+      }
       setSelectedFiles(new Set())
       setShowConfirm(false)
     } catch (error) {

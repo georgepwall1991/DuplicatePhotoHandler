@@ -5,26 +5,9 @@ import { ResultsView } from './components/ResultsView'
 import { ToastProvider } from './components/Toast'
 import './App.css'
 
-export type AppState = 'idle' | 'scanning' | 'results'
-
-export interface ScanResult {
-  total_photos: number
-  duplicate_groups: number
-  duplicate_count: number
-  potential_savings_bytes: number
-  duration_ms: number
-  groups: DuplicateGroup[]
-  errors: string[]
-}
-
-export interface DuplicateGroup {
-  id: string
-  photos: string[]
-  representative: string
-  match_type: string
-  duplicate_count: number
-  duplicate_size_bytes: number
-}
+// Re-export types from centralized location (avoids circular dependencies)
+export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
+import type { AppState, ScanResult } from './lib/types'
 
 function App() {
   const [appState, setAppState] = useState<AppState>('idle')

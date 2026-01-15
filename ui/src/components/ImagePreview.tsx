@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { convertFileSrc } from '@tauri-apps/api/core'
+import { convertFileSrc } from '../lib/tauri'
 
 interface ImagePreviewProps {
   src: string | null

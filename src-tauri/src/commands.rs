@@ -131,33 +131,37 @@ pub async fn start_scan(
 
     let event_sender = EventSender::new(sender);
 
-    // Run scan
-    let result = tokio::task::spawn_blocking(move || {
-        pipeline.run_with_events(&event_sender)
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    // Run scan - use a helper to ensure scanning state is always reset
+    let scan_result = async {
+        let task_result = tokio::task::spawn_blocking(move || {
+            pipeline.run_with_events(&event_sender)
+        })
+        .await
+        .map_err(|e| e.to_string())?;
 
-    // Check if cancelled
-    if cancelled.load(Ordering::SeqCst) {
-        // Mark scan complete
-        let mut scanning = state.scanning.lock().map_err(|e| e.to_string())?;
-        *scanning = false;
-        return Err("Scan was cancelled".to_string());
+        // Check if cancelled
+        if cancelled.load(Ordering::SeqCst) {
+            return Err("Scan was cancelled".to_string());
+        }
+
+        task_result.map_err(|e| e.to_string())
+    }
+    .await;
+
+    // ALWAYS reset scanning state, even on error (fixes potential deadlock)
+    {
+        if let Ok(mut scanning) = state.scanning.lock() {
+            *scanning = false;
+        }
     }
 
-    let result = result.map_err(|e| e.to_string())?;
+    // Now handle the result
+    let result = scan_result?;
 
     // Store results
     {
         let mut results = state.results.lock().map_err(|e| e.to_string())?;
         *results = Some(result.clone());
-    }
-
-    // Mark scan complete
-    {
-        let mut scanning = state.scanning.lock().map_err(|e| e.to_string())?;
-        *scanning = false;
     }
 
     // Convert to DTO
@@ -209,23 +213,34 @@ pub fn is_scanning(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(*scanning)
 }
 
+/// Result of trash operation
+#[derive(Debug, Serialize)]
+pub struct TrashResult {
+    pub trashed: usize,
+    pub errors: Vec<String>,
+}
+
 /// Move files to trash
 #[tauri::command]
-pub async fn trash_files(paths: Vec<String>) -> Result<usize, String> {
+pub async fn trash_files(paths: Vec<String>) -> Result<TrashResult, String> {
     let mut trashed = 0;
+    let mut errors = Vec::new();
 
     for path_str in paths {
         let path = PathBuf::from(&path_str);
         if path.exists() {
-            // Use trash crate or system API
             match trash::delete(&path) {
                 Ok(_) => trashed += 1,
                 Err(e) => {
-                    log::warn!("Failed to trash {}: {}", path_str, e);
+                    let error_msg = format!("{}: {}", path_str, e);
+                    log::warn!("Failed to trash {}", error_msg);
+                    errors.push(error_msg);
                 }
             }
+        } else {
+            errors.push(format!("{}: File not found", path_str));
         }
     }
 
-    Ok(trashed)
+    Ok(TrashResult { trashed, errors })
 }
