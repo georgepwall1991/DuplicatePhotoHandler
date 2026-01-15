@@ -247,6 +247,7 @@ impl Pipeline {
     /// Hash a single photo, checking cache first.
     ///
     /// Returns the hash and optionally a cache entry to be batch-written later.
+    /// Progress events are emitted AFTER completion to ensure monotonic progress.
     fn hash_single_photo(
         &self,
         photo: &PhotoFile,
@@ -256,14 +257,23 @@ impl Pipeline {
         total_photos: usize,
         events: &Arc<EventSender>,
     ) -> Option<SingleHashResult> {
-        let current_completed = completed.fetch_add(1, Ordering::SeqCst) + 1;
-
         // Check cache first
         if let Ok(Some(entry)) = self.cache.get(&photo.path, photo.size, photo.modified) {
-            cache_hits.fetch_add(1, Ordering::SeqCst);
+            let hits = cache_hits.fetch_add(1, Ordering::SeqCst) + 1;
+            // Increment completed AFTER work is done (for accurate progress)
+            let current_completed = completed.fetch_add(1, Ordering::SeqCst) + 1;
+
             events.send(Event::Hash(HashEvent::CacheHit {
                 path: photo.path.clone(),
             }));
+            // Also emit progress for cache hits so UI updates smoothly
+            events.send(Event::Hash(HashEvent::Progress(HashProgress {
+                completed: current_completed,
+                total: total_photos,
+                current_path: photo.path.clone(),
+                cache_hits: hits,
+            })));
+
             return Some(SingleHashResult {
                 path: photo.path.clone(),
                 hash: ImageHashValue::from_bytes(&entry.hash, entry.algorithm),
@@ -284,6 +294,9 @@ impl Pipeline {
                     cached_at: SystemTime::now(),
                 };
 
+                // Increment completed AFTER work is done (for accurate progress)
+                let current_completed = completed.fetch_add(1, Ordering::SeqCst) + 1;
+
                 events.send(Event::Hash(HashEvent::Progress(HashProgress {
                     completed: current_completed,
                     total: total_photos,
@@ -298,6 +311,14 @@ impl Pipeline {
                 })
             }
             Err(e) => {
+                // Still count errors as completed for accurate progress
+                let current_completed = completed.fetch_add(1, Ordering::SeqCst) + 1;
+                events.send(Event::Hash(HashEvent::Progress(HashProgress {
+                    completed: current_completed,
+                    total: total_photos,
+                    current_path: photo.path.clone(),
+                    cache_hits: cache_hits.load(Ordering::SeqCst),
+                })));
                 events.send(Event::Hash(HashEvent::Error {
                     path: photo.path.clone(),
                     message: e.to_string(),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { listen } from '../lib/tauri'
 
 interface ScanStats {
@@ -18,6 +18,8 @@ interface UseScanEventsProps {
 
 export function useScanEvents({ onProgress }: UseScanEventsProps) {
   const [stats, setStats] = useState<ScanStats>({ photosFound: 0, duplicatesFound: 0 })
+  // Track max completed to prevent backward jumps from parallel processing
+  const maxCompletedRef = useRef(0)
 
   useEffect(() => {
     const unlisten = listen('scan-event', (event) => {
@@ -35,12 +37,16 @@ export function useScanEvents({ onProgress }: UseScanEventsProps) {
 
       if (data.Hash?.Progress) {
         const hashProgress = data.Hash.Progress
-        const percent = Math.round((hashProgress.completed / hashProgress.total) * 70) + 10
-        onProgress({
-          phase: 'Hashing',
-          percent,
-          message: `Hashing photo ${hashProgress.completed} of ${hashProgress.total}`,
-        })
+        // Only update if progress moved forward (handles out-of-order parallel events)
+        if (hashProgress.completed > maxCompletedRef.current) {
+          maxCompletedRef.current = hashProgress.completed
+          const percent = Math.round((hashProgress.completed / hashProgress.total) * 70) + 10
+          onProgress({
+            phase: 'Hashing',
+            percent,
+            message: `Hashing photo ${hashProgress.completed} of ${hashProgress.total}`,
+          })
+        }
       }
 
       if (data.Compare?.Progress) {
@@ -63,6 +69,7 @@ export function useScanEvents({ onProgress }: UseScanEventsProps) {
 
   const resetStats = () => {
     setStats({ photosFound: 0, duplicatesFound: 0 })
+    maxCompletedRef.current = 0  // Reset max when starting new scan
   }
 
   return { stats, resetStats }
