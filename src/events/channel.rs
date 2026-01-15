@@ -17,16 +17,19 @@ pub struct EventSender {
 }
 
 impl EventSender {
+    /// Create a new EventSender from a raw crossbeam sender.
+    pub fn new(sender: Sender<Event>) -> Self {
+        Self { inner: sender }
+    }
+
     /// Send an event. Non-blocking if the channel isn't full.
+    ///
+    /// If the receiver is dropped, the event is silently discarded.
+    /// This allows progress reporting to be optional.
     pub fn send(&self, event: Event) {
         // Ignore send errors - if the receiver is dropped, we just
         // continue without progress reporting
         let _ = self.inner.send(event);
-    }
-
-    /// Check if the receiver is still connected
-    pub fn is_connected(&self) -> bool {
-        !self.inner.is_empty() || self.inner.len() == 0
     }
 }
 

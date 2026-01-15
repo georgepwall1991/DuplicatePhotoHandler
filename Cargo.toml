@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "src-tauri"]
+resolver = "2"
+
 [package]
 name = "duplicate-photo-cleaner"
 version = "0.1.0"
@@ -9,7 +13,10 @@ license = "MIT"
 [dependencies]
 # Image processing
 image = "0.25"
-image_hasher = "2.0"
+image_hasher = "3.0.0"
+
+# EXIF metadata extraction
+kamadak-exif = "0.5"
 
 # Filesystem traversal
 walkdir = "2.5"
@@ -18,15 +25,15 @@ walkdir = "2.5"
 rayon = "1.10"
 
 # Database caching
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.38.0", features = ["bundled"] }
 
 # Error handling
 thiserror = "2.0"
 
 # CLI
 clap = { version = "4.5", features = ["derive"] }
-indicatif = "0.17"
-console = "0.15"
+indicatif = "0.18.3"
+console = "0.16.2"
 
 # Serialization (GUI-ready)
 serde = { version = "1.0", features = ["derive"] }
@@ -37,7 +44,7 @@ crossbeam-channel = "0.5"
 
 # Utilities
 uuid = { version = "1.10", features = ["v4", "serde"] }
-dirs = "5.0"
+dirs = "6.0.0"
 chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
