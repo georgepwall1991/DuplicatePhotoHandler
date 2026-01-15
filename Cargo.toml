@@ -1,0 +1,55 @@
+[package]
+name = "duplicate-photo-cleaner"
+version = "0.1.0"
+edition = "2021"
+authors = ["George Wall"]
+description = "A trustworthy duplicate photo finder that explains why photos are duplicates"
+license = "MIT"
+
+[dependencies]
+# Image processing
+image = "0.25"
+image_hasher = "2.0"
+
+# Filesystem traversal
+walkdir = "2.5"
+
+# Parallelism
+rayon = "1.10"
+
+# Database caching
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Error handling
+thiserror = "2.0"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+indicatif = "0.17"
+console = "0.15"
+
+# Serialization (GUI-ready)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Event channels (GUI-ready)
+crossbeam-channel = "0.5"
+
+# Utilities
+uuid = { version = "1.10", features = ["v4", "serde"] }
+dirs = "5.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+# Testing
+tempfile = "3.12"
+assert_fs = "1.1"
+predicates = "3.1"
+
+[lib]
+name = "duplicate_photo_cleaner"
+path = "src/lib.rs"
+
+[[bin]]
+name = "photo-dedup"
+path = "src/main.rs"
