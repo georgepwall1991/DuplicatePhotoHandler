@@ -178,14 +178,17 @@ impl Pipeline {
 
     /// Hash all photos in parallel, using cache when available.
     ///
-    /// Uses batch cache writes for better performance:
-    /// - All hashes are computed in parallel
-    /// - Cache entries are collected and written in a single batch transaction
+    /// Uses chunked batch cache writes for better performance AND durability:
+    /// - Photos are processed in chunks (default: 100)
+    /// - Each chunk is hashed in parallel, then cache is flushed
+    /// - This provides incremental progress saving (crash recovery)
     fn hash_photos(
         &self,
         photos: &[PhotoFile],
         events: &EventSender,
     ) -> Result<HashingResult, DuplicateFinderError> {
+        const CHUNK_SIZE: usize = 100;
+
         let total_photos = photos.len();
         let hasher = HasherConfig::new()
             .algorithm(self.config.algorithm)
@@ -195,40 +198,48 @@ impl Pipeline {
         let completed = AtomicUsize::new(0);
         let events_arc = Arc::new(events.clone());
 
-        // Process all photos in parallel, collecting results
-        let results: Vec<SingleHashResult> = photos
-            .par_iter()
-            .filter_map(|photo| {
-                self.hash_single_photo(
-                    photo,
-                    hasher.as_ref(),
-                    &cache_hits,
-                    &completed,
-                    total_photos,
-                    &events_arc,
-                )
-            })
-            .collect();
+        let mut all_hashes: Vec<(PathBuf, ImageHashValue)> = Vec::with_capacity(total_photos);
 
-        // Collect cache entries for batch write
-        let cache_entries: Vec<CacheEntry> = results
-            .iter()
-            .filter_map(|r| r.cache_entry.clone())
-            .collect();
+        // Process photos in chunks for incremental cache durability
+        for chunk in photos.chunks(CHUNK_SIZE) {
+            // Process chunk in parallel
+            let results: Vec<SingleHashResult> = chunk
+                .par_iter()
+                .filter_map(|photo| {
+                    self.hash_single_photo(
+                        photo,
+                        hasher.as_ref(),
+                        &cache_hits,
+                        &completed,
+                        total_photos,
+                        &events_arc,
+                    )
+                })
+                .collect();
 
-        // Batch write all new cache entries (much faster than individual writes)
-        if !cache_entries.is_empty() {
-            let _ = self.cache.set_batch(&cache_entries);
+            // Collect cache entries for this chunk
+            let cache_entries: Vec<CacheEntry> = results
+                .iter()
+                .filter_map(|r| r.cache_entry.clone())
+                .collect();
+
+            // Batch write cache entries for this chunk (provides incremental durability)
+            if !cache_entries.is_empty() {
+                if let Err(e) = self.cache.set_batch(&cache_entries) {
+                    // Log error but continue - hashing succeeded, just cache write failed
+                    events.send(Event::Hash(HashEvent::Error {
+                        path: PathBuf::from("cache"),
+                        message: format!("Failed to write {} entries to cache: {}", cache_entries.len(), e),
+                    }));
+                }
+            }
+
+            // Collect hashes from this chunk
+            all_hashes.extend(results.into_iter().map(|r| (r.path, r.hash)));
         }
 
-        // Extract hashes for return
-        let hashes: Vec<(PathBuf, ImageHashValue)> = results
-            .into_iter()
-            .map(|r| (r.path, r.hash))
-            .collect();
-
         Ok(HashingResult {
-            hashes,
+            hashes: all_hashes,
             cache_hits: cache_hits.load(Ordering::SeqCst),
         })
     }
