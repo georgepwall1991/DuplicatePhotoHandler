@@ -1,4 +1,5 @@
-import { useState, useEffect, DragEvent } from 'react'
+import { useState, useEffect } from 'react'
+import type { DragEvent } from 'react'
 import { open, listen } from '../lib/tauri'
 
 interface FolderSelectorProps {
@@ -11,7 +12,7 @@ export function FolderSelector({ selectedPaths, onPathsChange }: FolderSelectorP
 
   // Listen for Tauri file drop events
   useEffect(() => {
-    const unlisten = listen<{ paths: string[] }>('tauri://drag-drop', (event) => {
+    const unlisten = listen('tauri://drag-drop', (event: { payload: { paths: string[] } }) => {
       const paths = event.payload.paths
       if (paths && paths.length > 0) {
         // Filter to only directories (or accept all and let backend filter)

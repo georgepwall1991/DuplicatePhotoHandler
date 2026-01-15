@@ -61,6 +61,8 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
   const [showErrors, setShowErrors] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [lastTrashedFiles, setLastTrashedFiles] = useState<string[]>([])
+  const [isRestoring, setIsRestoring] = useState(false)
   const { showToast } = useToast()
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -186,10 +188,21 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     if (selectedFiles.size === 0) return
 
     setIsDeleting(true)
+    const paths = Array.from(selectedFiles)
+
     try {
       const result = await invoke<{ trashed: number; errors: string[] }>('trash_files', {
-        paths: Array.from(selectedFiles),
+        paths,
       })
+
+      if (result.trashed > 0) {
+        // Save trashed file names for potential undo
+        const filenames = paths
+          .filter((_, i) => i < result.trashed)
+          .map(p => p.split('/').pop() || p)
+        setLastTrashedFiles(filenames)
+      }
+
       if (result.errors.length > 0) {
         showToast(`Moved ${result.trashed} files to Trash (${result.errors.length} failed)`, 'warning')
         console.warn('Trash errors:', result.errors)
@@ -203,6 +216,29 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       showToast(`Error: ${error}`, 'error')
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  const handleUndo = async () => {
+    if (lastTrashedFiles.length === 0) return
+
+    setIsRestoring(true)
+    try {
+      const result = await invoke<{ restored: number; errors: string[] }>('restore_from_trash', {
+        filenames: lastTrashedFiles,
+      })
+
+      if (result.restored > 0) {
+        showToast(`Restored ${result.restored} files from Trash`, 'success')
+        setLastTrashedFiles([])
+      } else if (result.errors.length > 0) {
+        showToast(`Could not restore: ${result.errors[0]}`, 'warning')
+      }
+    } catch (error) {
+      console.error('Failed to restore files:', error)
+      showToast(`Restore failed: ${error}`, 'error')
+    } finally {
+      setIsRestoring(false)
     }
   }
 
@@ -310,12 +346,20 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
           // Clear focus
           setFocusedIndex(null)
           break
+
+        case 'z':
+          // Cmd+Z / Ctrl+Z to undo
+          if ((e.metaKey || e.ctrlKey) && lastTrashedFiles.length > 0 && !isRestoring) {
+            e.preventDefault()
+            handleUndo()
+          }
+          break
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [filteredAndSortedGroups, focusedIndex, selectedFiles.size, showConfirm, previewImage, comparison, handleSmartSelect, clearSelection, toggleGroupExpanded])
+  }, [filteredAndSortedGroups, focusedIndex, selectedFiles.size, showConfirm, previewImage, comparison, handleSmartSelect, clearSelection, toggleGroupExpanded, lastTrashedFiles.length, isRestoring, handleUndo])
 
   // Scroll focused group into view
   useEffect(() => {
@@ -400,6 +444,10 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
         selectedSize={selectedSize}
         isDeleting={isDeleting}
         onTrash={() => setShowConfirm(true)}
+        canUndo={lastTrashedFiles.length > 0}
+        undoCount={lastTrashedFiles.length}
+        isRestoring={isRestoring}
+        onUndo={handleUndo}
       />
 
       {/* Confirmation modal */}

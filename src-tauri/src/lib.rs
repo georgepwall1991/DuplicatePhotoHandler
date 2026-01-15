@@ -16,6 +16,7 @@ pub fn run() {
             commands::is_scanning,
             commands::trash_files,
             commands::get_file_info,
+            commands::restore_from_trash,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

@@ -3,7 +3,7 @@ import { useState, useEffect, createContext, useContext, useCallback } from 'rea
 interface Toast {
   id: string
   message: string
-  type: 'success' | 'error' | 'info'
+  type: 'success' | 'error' | 'info' | 'warning'
   duration?: number
 }
 
@@ -65,19 +65,22 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
   const icons = {
     success: '✓',
     error: '✕',
-    info: 'ℹ'
+    info: 'ℹ',
+    warning: '⚠'
   }
 
   const colors = {
     success: 'from-green-500 to-emerald-600',
     error: 'from-red-500 to-red-600',
-    info: 'from-purple-500 to-purple-600'
+    info: 'from-purple-500 to-purple-600',
+    warning: 'from-amber-500 to-amber-600'
   }
 
   const glows = {
     success: 'shadow-green-500/20',
     error: 'shadow-red-500/20',
-    info: 'shadow-purple-500/20'
+    info: 'shadow-purple-500/20',
+    warning: 'shadow-amber-500/20'
   }
 
   return (

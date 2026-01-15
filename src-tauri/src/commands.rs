@@ -288,3 +288,66 @@ pub async fn trash_files(paths: Vec<String>) -> Result<TrashResult, String> {
 
     Ok(TrashResult { trashed, errors })
 }
+
+/// Result of restore operation
+#[derive(Debug, Serialize)]
+pub struct RestoreResult {
+    pub restored: usize,
+    pub errors: Vec<String>,
+}
+
+/// Restore files from trash (macOS only)
+/// Uses AppleScript to put files back to their original locations
+#[tauri::command]
+pub async fn restore_from_trash(filenames: Vec<String>) -> Result<RestoreResult, String> {
+    let mut restored = 0;
+    let mut errors = Vec::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        for filename in filenames {
+            // AppleScript to restore a file from Trash
+            let script = format!(
+                r#"
+                tell application "Finder"
+                    set trashItems to items of trash
+                    repeat with trashItem in trashItems
+                        if name of trashItem is "{}" then
+                            move trashItem to (original item of trashItem)
+                            return "ok"
+                        end if
+                    end repeat
+                    return "not found"
+                end tell
+                "#,
+                filename.replace("\"", "\\\"")
+            );
+
+            let output = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(&script)
+                .output();
+
+            match output {
+                Ok(out) => {
+                    let result = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    if result == "ok" {
+                        restored += 1;
+                    } else {
+                        errors.push(format!("{}: Not found in Trash", filename));
+                    }
+                }
+                Err(e) => {
+                    errors.push(format!("{}: {}", filename, e));
+                }
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        errors.push("Restore from trash is only supported on macOS".to_string());
+    }
+
+    Ok(RestoreResult { restored, errors })
+}
