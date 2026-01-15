@@ -233,6 +233,49 @@ impl CacheBackend for SqliteCache {
         Ok(())
     }
 
+    fn set_batch(&self, entries: &[CacheEntry]) -> Result<(), CacheError> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        let mut conn = self.conn.lock().map_err(|_| CacheError::Corrupted {
+            path: self.db_path.clone(),
+        })?;
+
+        // Use a transaction for batch insert (significantly faster)
+        let tx = conn
+            .transaction()
+            .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+        {
+            let mut stmt = tx
+                .prepare_cached(
+                    "INSERT OR REPLACE INTO hashes
+                     (path, hash, algorithm, file_size, file_modified, cached_at)
+                     VALUES (?, ?, ?, ?, ?, ?)",
+                )
+                .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+            for entry in entries {
+                let path_str = entry.path.to_string_lossy();
+                stmt.execute(params![
+                    path_str,
+                    &entry.hash,
+                    Self::algorithm_to_string(entry.algorithm),
+                    entry.file_size as i64,
+                    Self::to_timestamp(entry.file_modified),
+                    Self::to_timestamp(entry.cached_at),
+                ])
+                .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+            }
+        }
+
+        tx.commit()
+            .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+        Ok(())
+    }
+
     fn remove(&self, path: &Path) -> Result<(), CacheError> {
         let conn = self.conn.lock().map_err(|_| CacheError::Corrupted {
             path: self.db_path.clone(),
@@ -414,6 +457,37 @@ mod tests {
         cache.set(create_entry("/b.jpg")).unwrap();
 
         cache.clear().unwrap();
+
+        let stats = cache.stats().unwrap();
+        assert_eq!(stats.total_entries, 0);
+    }
+
+    #[test]
+    fn sqlite_cache_batch_insert() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("cache.db");
+
+        let cache = SqliteCache::open(&db_path).unwrap();
+
+        let entries: Vec<CacheEntry> = (0..100)
+            .map(|i| create_entry(&format!("/photo_{}.jpg", i)))
+            .collect();
+
+        cache.set_batch(&entries).unwrap();
+
+        let stats = cache.stats().unwrap();
+        assert_eq!(stats.total_entries, 100);
+    }
+
+    #[test]
+    fn sqlite_cache_batch_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("cache.db");
+
+        let cache = SqliteCache::open(&db_path).unwrap();
+
+        // Empty batch should succeed without error
+        cache.set_batch(&[]).unwrap();
 
         let stats = cache.stats().unwrap();
         assert_eq!(stats.total_entries, 0);
