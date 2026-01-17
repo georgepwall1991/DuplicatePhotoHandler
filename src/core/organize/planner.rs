@@ -23,6 +23,9 @@ impl OrganizePlanner {
         let mut by_year: HashMap<u32, (usize, u64)> = HashMap::new();
         let mut no_date_count = 0;
         let mut destinations: HashSet<String> = HashSet::new();
+        // Track next available counter for each base path (parent + stem + ext)
+        // This avoids O(N^2) conflict resolution when many files have the same name
+        let mut path_counters: HashMap<String, usize> = HashMap::new();
         let mut conflict_count = 0;
         let mut earliest: Option<NaiveDate> = None;
         let mut latest: Option<NaiveDate> = None;
@@ -63,13 +66,14 @@ impl OrganizePlanner {
             let mut dest_path = dest_base.join(&dest_folder).join(&filename);
             let mut has_conflict = false;
 
-            // Check for conflicts
+            // Check for conflicts using efficient counter-based resolution
             let dest_str = dest_path.display().to_string();
             if destinations.contains(&dest_str) {
                 has_conflict = true;
                 conflict_count += 1;
-                // Generate unique name
-                dest_path = Self::generate_unique_path(&dest_path, &destinations);
+                // Generate unique name using counter tracking (O(1) instead of O(N))
+                dest_path =
+                    Self::generate_unique_path_fast(&dest_path, &destinations, &mut path_counters);
             }
 
             let final_dest = dest_path.display().to_string();
@@ -149,6 +153,43 @@ impl OrganizePlanner {
         }
     }
 
+    /// Fast unique path generation using counter tracking (O(1) per call)
+    fn generate_unique_path_fast(
+        path: &Path,
+        existing: &HashSet<String>,
+        counters: &mut HashMap<String, usize>,
+    ) -> std::path::PathBuf {
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        let parent = path.parent().unwrap_or(Path::new(""));
+
+        // Create a key for this path pattern (parent + stem + ext)
+        let pattern_key = format!("{}:{}:{}", parent.display(), stem, ext);
+
+        // Get the next counter value for this pattern
+        let counter = counters.entry(pattern_key).or_insert(1);
+
+        loop {
+            let new_name = if ext.is_empty() {
+                format!("{}_{}", stem, counter)
+            } else {
+                format!("{}_{}.{}", stem, counter, ext)
+            };
+            let new_path = parent.join(new_name);
+            let new_path_str = new_path.display().to_string();
+
+            // Increment counter for next call
+            *counter += 1;
+
+            // Double-check not in existing (handles edge cases)
+            if !existing.contains(&new_path_str) {
+                return new_path;
+            }
+        }
+    }
+
+    /// Original unique path generation (kept for reference and tests)
+    #[allow(dead_code)]
     fn generate_unique_path(path: &Path, existing: &HashSet<String>) -> std::path::PathBuf {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");

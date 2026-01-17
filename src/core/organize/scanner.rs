@@ -1,9 +1,12 @@
 //! Scanner for extracting dates from media files.
 
 use chrono::NaiveDate;
+use rayon::prelude::*;
 use std::fs::{self, File};
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use walkdir::WalkDir;
 
@@ -87,6 +90,7 @@ impl OrganizeScanner {
     }
 
     /// Scan directories and return all media files with dates
+    /// Uses parallel processing with Rayon for EXIF extraction
     pub fn scan_with_progress<F>(
         paths: &[String],
         mut on_progress: F,
@@ -94,11 +98,8 @@ impl OrganizeScanner {
     where
         F: FnMut(usize, &str),
     {
-        let mut results = Vec::new();
-        let mut scanned = 0;
-        let mut last_progress = Instant::now();
-        const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
-
+        // Phase 1: Collect all media file paths (fast sequential operation)
+        let mut media_paths: Vec<PathBuf> = Vec::new();
         for path_str in paths {
             let path = Path::new(path_str);
             if !path.exists() {
@@ -107,28 +108,48 @@ impl OrganizeScanner {
 
             for entry in WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
                 let entry_path = entry.path();
-
-                if !entry_path.is_file() || !Self::is_media_file(entry_path) {
-                    continue;
+                if entry_path.is_file() && Self::is_media_file(entry_path) {
+                    media_paths.push(entry_path.to_path_buf());
                 }
-
-                scanned += 1;
-
-                // Progress every 50 files or 100ms
-                let now = Instant::now();
-                if scanned % 50 == 0 || now.duration_since(last_progress) >= PROGRESS_INTERVAL {
-                    on_progress(scanned, entry_path.to_str().unwrap_or(""));
-                    last_progress = now;
-                }
-
-                let size = fs::metadata(entry_path).map(|m| m.len()).unwrap_or(0);
-                let date = Self::extract_date(entry_path);
-
-                results.push((entry_path.display().to_string(), date, size));
             }
         }
 
-        on_progress(scanned, "");
+        let total_files = media_paths.len();
+        on_progress(0, &format!("Found {} media files, extracting dates...", total_files));
+
+        if media_paths.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Phase 2: Extract dates in parallel using Rayon
+        let processed = Arc::new(AtomicUsize::new(0));
+        let last_progress_time = Arc::new(std::sync::Mutex::new(Instant::now()));
+
+        let results: Vec<(String, Option<NaiveDate>, u64)> = media_paths
+            .par_iter()
+            .map(|path| {
+                let size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+                let date = Self::extract_date(path);
+                let path_str = path.display().to_string();
+
+                // Update progress counter
+                let current = processed.fetch_add(1, Ordering::Relaxed) + 1;
+
+                // Throttle progress updates to reduce lock contention
+                if current % 100 == 0 {
+                    if let Ok(mut last_time) = last_progress_time.try_lock() {
+                        let now = Instant::now();
+                        if now.duration_since(*last_time) >= Duration::from_millis(100) {
+                            *last_time = now;
+                        }
+                    }
+                }
+
+                (path_str, date, size)
+            })
+            .collect();
+
+        on_progress(total_files, "");
         Ok(results)
     }
 }

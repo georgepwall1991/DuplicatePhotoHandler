@@ -64,7 +64,24 @@ impl OrganizeExecutor {
                 OperationMode::Copy => fs::copy(source_path, dest_path).map(|_| ()),
                 OperationMode::Move => fs::rename(source_path, dest_path).or_else(|_| {
                     // rename fails across filesystems, fall back to copy+delete
+                    // with size verification before deleting source
+                    let source_size = fs::metadata(source_path)?.len();
                     fs::copy(source_path, dest_path)?;
+
+                    // Verify destination size matches source before deleting
+                    let dest_size = fs::metadata(dest_path)?.len();
+                    if dest_size != source_size {
+                        // Copy was incomplete, don't delete source
+                        let _ = fs::remove_file(dest_path);
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!(
+                                "Copy verification failed: source {} bytes, dest {} bytes",
+                                source_size, dest_size
+                            ),
+                        ));
+                    }
+
                     fs::remove_file(source_path)
                 }),
             };
