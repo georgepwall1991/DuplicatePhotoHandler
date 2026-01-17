@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Sidebar } from './components/Sidebar'
 import { ScanView } from './components/ScanView'
 import { ResultsView } from './components/ResultsView'
+import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
 
@@ -18,6 +19,7 @@ function AppContent() {
   const [isWatching, setIsWatching] = useState(false)
   const [watchedPaths, setWatchedPaths] = useState<string[]>([])
   const [scannedPaths, setScannedPaths] = useState<string[]>([])
+  const [showSettings, setShowSettings] = useState(false)
   const { showToast } = useToast()
   const watcherUnlistenRef = useRef<(() => void) | null>(null)
 
@@ -112,6 +114,7 @@ function AppContent() {
         isWatching={isWatching}
         watchedPaths={watchedPaths}
         onToggleWatch={handleToggleWatch}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       <main className="flex-1 relative z-10 flex flex-col overflow-hidden">
@@ -173,6 +176,12 @@ function AppContent() {
           )}
         </AnimatePresence>
       </main>
+
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        onCacheCleared={() => showToast('Cache cleared successfully', 'success')}
+      />
     </div>
   )
 }

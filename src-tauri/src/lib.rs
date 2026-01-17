@@ -24,6 +24,8 @@ pub fn run() {
             commands::get_watched_paths,
             commands::export_results_csv,
             commands::export_results_html,
+            commands::get_cache_info,
+            commands::clear_cache,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

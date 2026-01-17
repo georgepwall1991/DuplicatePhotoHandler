@@ -23,6 +23,7 @@ interface SidebarProps {
   isWatching?: boolean
   watchedPaths?: string[]
   onToggleWatch?: () => void
+  onOpenSettings?: () => void
 }
 
 const formatBytes = (bytes: number): string => {
@@ -39,7 +40,8 @@ export function Sidebar({
   potentialSavings,
   isWatching,
   watchedPaths,
-  onToggleWatch
+  onToggleWatch,
+  onOpenSettings
 }: SidebarProps) {
   const guardEnabled = Boolean(isWatching)
   const guardedCount = watchedPaths?.length ?? 0
@@ -275,6 +277,7 @@ export function Sidebar({
 
               <button
                 type="button"
+                onClick={onOpenSettings}
                 className="group flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/5"
               >
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-slate-700 to-slate-900">

@@ -1,5 +1,6 @@
 //! Tauri commands for the duplicate photo finder.
 
+use duplicate_photo_cleaner::core::cache::{CacheBackend, SqliteCache};
 use duplicate_photo_cleaner::core::comparator::DuplicateGroup;
 use duplicate_photo_cleaner::core::hasher::HashAlgorithmKind;
 use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Application state
 pub struct AppState {
@@ -558,4 +559,65 @@ pub fn export_results_html(
         format: "HTML".to_string(),
         groups_exported: result.groups.len(),
     })
+}
+
+/// Cache info for frontend
+#[derive(Debug, Serialize)]
+pub struct CacheInfoDto {
+    pub entries: usize,
+    pub size_bytes: u64,
+    pub path: String,
+}
+
+/// Get the cache database path
+fn get_cache_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    Ok(app_data_dir.join("cache.db"))
+}
+
+/// Get cache information
+#[tauri::command]
+pub fn get_cache_info(app: AppHandle) -> Result<CacheInfoDto, String> {
+    let cache_path = get_cache_path(&app)?;
+
+    if !cache_path.exists() {
+        return Ok(CacheInfoDto {
+            entries: 0,
+            size_bytes: 0,
+            path: cache_path.display().to_string(),
+        });
+    }
+
+    let cache = SqliteCache::open(&cache_path).map_err(|e| e.to_string())?;
+    let stats = cache.stats().map_err(|e| e.to_string())?;
+
+    // Get actual file size on disk
+    let file_size = std::fs::metadata(&cache_path)
+        .map(|m| m.len())
+        .unwrap_or(stats.total_size_bytes);
+
+    Ok(CacheInfoDto {
+        entries: stats.total_entries,
+        size_bytes: file_size,
+        path: cache_path.display().to_string(),
+    })
+}
+
+/// Clear the cache database
+#[tauri::command]
+pub fn clear_cache(app: AppHandle) -> Result<bool, String> {
+    let cache_path = get_cache_path(&app)?;
+
+    if !cache_path.exists() {
+        return Ok(true);
+    }
+
+    let cache = SqliteCache::open(&cache_path).map_err(|e| e.to_string())?;
+    cache.clear().map_err(|e| e.to_string())?;
+
+    Ok(true)
 }
