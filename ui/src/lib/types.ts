@@ -86,5 +86,22 @@ export interface ScreenshotScanResult {
   scan_duration_ms: number
 }
 
+// Large file information
+export interface LargeFileInfo {
+  path: string
+  filename: string
+  size_bytes: number
+  file_type: string
+  modified: number  // Unix timestamp
+}
+
+// Large file scan result
+export interface LargeFileScanResult {
+  files: LargeFileInfo[]
+  total_size_bytes: number
+  files_scanned: number
+  scan_duration_ms: number
+}
+
 // Module routing
-export type ActiveModule = 'duplicates' | 'screenshots'
+export type ActiveModule = 'duplicates' | 'screenshots' | 'large'
