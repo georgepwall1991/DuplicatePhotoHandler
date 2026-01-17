@@ -830,9 +830,19 @@ pub async fn scan_screenshots(
     })
 }
 
+/// Large file scan progress event
+#[derive(Clone, Serialize)]
+pub struct LargeFileScanProgress {
+    pub files_scanned: u64,
+    pub large_files_found: usize,
+    pub current_file: String,
+    pub phase: String,
+}
+
 /// Scan for large files
 #[tauri::command]
 pub async fn scan_large_files(
+    app: AppHandle,
     paths: Vec<String>,
     min_size_mb: Option<u64>,
     max_results: Option<usize>,
@@ -861,14 +871,47 @@ pub async fn scan_large_files(
     // Create scanner with optional overrides
     let scanner = LargeFileScanner::new(min_size_mb, max_results);
 
-    // Run scan
-    let result = match scanner.scan(&paths) {
+    // Emit initial progress
+    let _ = app.emit(
+        "large-file-scan-event",
+        LargeFileScanProgress {
+            files_scanned: 0,
+            large_files_found: 0,
+            current_file: "Starting scan...".to_string(),
+            phase: "Scanning".to_string(),
+        },
+    );
+
+    // Run scan with progress callback
+    let app_handle = app.clone();
+    let result = match scanner.scan_with_progress(&paths, |files_scanned, large_found, current| {
+        let _ = app_handle.emit(
+            "large-file-scan-event",
+            LargeFileScanProgress {
+                files_scanned,
+                large_files_found: large_found,
+                current_file: current.to_string(),
+                phase: "Scanning".to_string(),
+            },
+        );
+    }) {
         Ok(result) => result,
         Err(e) => {
             reset_scanning();
             return Err(e);
         }
     };
+
+    // Emit completion event
+    let _ = app.emit(
+        "large-file-scan-event",
+        LargeFileScanProgress {
+            files_scanned: result.files_scanned,
+            large_files_found: result.files.len(),
+            current_file: "".to_string(),
+            phase: "Complete".to_string(),
+        },
+    );
 
     // Reset scanning state
     reset_scanning();

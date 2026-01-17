@@ -7,6 +7,7 @@ import type { LargeFileScanResult } from '../lib/types'
 import { ScanButton } from './ScanButton'
 import { ScanProgress } from './ScanProgress'
 import { FolderSelector } from './FolderSelector'
+import { useLargeFileScanEvents } from '../hooks/useLargeFileScanEvents'
 
 interface LargeFileScanViewProps {
   isScanning?: boolean
@@ -29,7 +30,8 @@ export function LargeFileScanView({
 }: LargeFileScanViewProps) {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [isCancelling, setIsCancelling] = useState(false)
-  const [filesScanned, setFilesScanned] = useState(0)
+
+  const { stats, resetStats } = useLargeFileScanEvents({ onProgress })
 
   const handlePathsChange = (paths: string[]) => {
     setSelectedPaths(paths)
@@ -51,8 +53,7 @@ export function LargeFileScanView({
     if (selectedPaths.length === 0) return
 
     onScanStart()
-    setFilesScanned(0)
-    onProgress({ phase: 'Scanning', percent: 0, message: 'Looking for large files...' })
+    resetStats()
 
     try {
       const result = await invoke<LargeFileScanResult>('scan_large_files', {
@@ -60,7 +61,6 @@ export function LargeFileScanView({
         minSizeMb: 10,
         maxResults: 50,
       })
-      setFilesScanned(result.files_scanned)
       onScanComplete(result)
     } catch (error) {
       console.error('Large file scan failed:', error)
@@ -75,8 +75,8 @@ export function LargeFileScanView({
         phase={progress.phase}
         percent={progress.percent}
         message={progress.message}
-        photosFound={filesScanned}
-        duplicatesFound={0}
+        photosFound={stats.filesScanned}
+        duplicatesFound={stats.largeFilesFound}
         isCancelling={isCancelling}
         onCancel={handleCancelScan}
       />

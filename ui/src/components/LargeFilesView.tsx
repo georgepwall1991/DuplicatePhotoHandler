@@ -4,7 +4,8 @@ import { motion } from 'framer-motion'
 import { Trash2, CheckSquare, Square, ArrowLeft, HardDrive } from 'lucide-react'
 import { LargeFileGrid } from './LargeFileGrid'
 import { ConfirmModal } from './ConfirmModal'
-import type { LargeFileScanResult } from '../lib/types'
+import { ImagePreview } from './ImagePreview'
+import type { LargeFileScanResult, LargeFileInfo } from '../lib/types'
 
 interface LargeFilesViewProps {
   results: LargeFileScanResult
@@ -23,6 +24,7 @@ export function LargeFilesView({ results, onNewScan }: LargeFilesViewProps) {
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [showConfirm, setShowConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [previewFile, setPreviewFile] = useState<LargeFileInfo | null>(null)
 
   const handleToggleSelect = useCallback((path: string) => {
     setSelectedPaths(prev => {
@@ -127,6 +129,7 @@ export function LargeFilesView({ results, onNewScan }: LargeFilesViewProps) {
           files={results.files}
           selectedPaths={selectedPaths}
           onToggleSelect={handleToggleSelect}
+          onPreview={setPreviewFile}
         />
       </div>
 
@@ -148,6 +151,14 @@ export function LargeFilesView({ results, onNewScan }: LargeFilesViewProps) {
         onCancel={() => setShowConfirm(false)}
         variant="danger"
         isLoading={isDeleting}
+      />
+
+      {/* Image preview modal */}
+      <ImagePreview
+        src={previewFile?.path ?? null}
+        onClose={() => setPreviewFile(null)}
+        isSelected={previewFile ? selectedPaths.has(previewFile.path) : undefined}
+        onDelete={previewFile ? () => handleToggleSelect(previewFile.path) : undefined}
       />
     </div>
   )

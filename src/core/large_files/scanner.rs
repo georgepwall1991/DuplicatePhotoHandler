@@ -92,6 +92,26 @@ impl LargeFileScanner {
     /// * `Ok(LargeFileScanResult)` - Scan results with large files
     /// * `Err(String)` - Error message if path doesn't exist
     pub fn scan(&self, paths: &[String]) -> Result<LargeFileScanResult, String> {
+        self.scan_with_progress(paths, |_, _, _| {})
+    }
+
+    /// Scan directories for large files with progress callback
+    ///
+    /// # Arguments
+    /// * `paths` - Slice of directory paths to scan
+    /// * `on_progress` - Callback called with (files_scanned, large_files_found, current_file)
+    ///
+    /// # Returns
+    /// * `Ok(LargeFileScanResult)` - Scan results with large files
+    /// * `Err(String)` - Error message if path doesn't exist
+    pub fn scan_with_progress<F>(
+        &self,
+        paths: &[String],
+        mut on_progress: F,
+    ) -> Result<LargeFileScanResult, String>
+    where
+        F: FnMut(u64, usize, &str),
+    {
         let start = std::time::Instant::now();
 
         let mut heap: BinaryHeap<Reverse<LargeFileInfo>> = BinaryHeap::new();
@@ -119,6 +139,15 @@ impl LargeFileScanner {
                 }
 
                 files_scanned += 1;
+
+                // Report progress every 100 files
+                if files_scanned % 100 == 0 {
+                    on_progress(
+                        files_scanned,
+                        heap.len(),
+                        entry_path.to_str().unwrap_or(""),
+                    );
+                }
 
                 // Get file metadata (O(1) operation)
                 if let Ok(metadata) = fs::metadata(entry_path) {
@@ -149,6 +178,9 @@ impl LargeFileScanner {
                 }
             }
         }
+
+        // Final progress update
+        on_progress(files_scanned, heap.len(), "");
 
         // Extract files from heap (they're in reverse order, so largest are at the end)
         let mut files: Vec<LargeFileInfo> = heap
