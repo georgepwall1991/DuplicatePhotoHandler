@@ -6,6 +6,7 @@ import { Sidebar } from './components/Sidebar'
 import { ScanView } from './components/ScanView'
 import { ResultsView } from './components/ResultsView'
 import { ScreenshotsView } from './components/ScreenshotsView'
+import { ScreenshotScanView } from './components/ScreenshotScanView'
 import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
@@ -17,7 +18,9 @@ function AppContent() {
   const [appState, setAppState] = useState<AppState>('idle')
   const [results, setResults] = useState<ScanResult | null>(null)
   const [screenshotResults, setScreenshotResults] = useState<ScreenshotScanResult | null>(null)
+  const [screenshotAppState, setScreenshotAppState] = useState<AppState>('idle')
   const [progress, setProgress] = useState({ phase: '', percent: 0, message: '' })
+  const [screenshotProgress, setScreenshotProgress] = useState({ phase: '', percent: 0, message: '' })
   const [isWatching, setIsWatching] = useState(false)
   const [watchedPaths, setWatchedPaths] = useState<string[]>([])
   const [scannedPaths, setScannedPaths] = useState<string[]>([])
@@ -84,10 +87,16 @@ function AppContent() {
   const handleNewScan = () => {
     if (activeModule === 'screenshots') {
       setScreenshotResults(null)
+      setScreenshotAppState('idle')
     } else {
       setResults(null)
       setAppState('idle')
     }
+  }
+
+  const handleScreenshotScanComplete = (result: ScreenshotScanResult) => {
+    setScreenshotResults(result)
+    setScreenshotAppState('results')
   }
 
   return (
@@ -190,19 +199,61 @@ function AppContent() {
 
           {/* Screenshots Module */}
           {activeModule === 'screenshots' && (
-            <motion.div
-              key="screenshots"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.5, ease: "circOut" }}
-              className="flex-1 glass-strong overflow-hidden shadow-2xl"
-            >
-              <ScreenshotsView
-                results={screenshotResults}
-                onNewScan={handleNewScan}
-              />
-            </motion.div>
+            <>
+              {screenshotAppState === 'idle' && (
+                <motion.div
+                  key="screenshot-idle"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <ScreenshotScanView
+                    onScanStart={() => setScreenshotAppState('scanning')}
+                    onScanComplete={handleScreenshotScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setScreenshotProgress}
+                  />
+                </motion.div>
+              )}
+
+              {screenshotAppState === 'scanning' && (
+                <motion.div
+                  key="screenshot-scanning"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <ScreenshotScanView
+                    isScanning
+                    progress={screenshotProgress}
+                    onScanStart={() => { }}
+                    onScanComplete={handleScreenshotScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setScreenshotProgress}
+                  />
+                </motion.div>
+              )}
+
+              {screenshotAppState === 'results' && screenshotResults && (
+                <motion.div
+                  key="screenshot-results"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.5, ease: "circOut" }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <ScreenshotsView
+                    results={screenshotResults}
+                    onNewScan={handleNewScan}
+                  />
+                </motion.div>
+              )}
+            </>
           )}
         </AnimatePresence>
       </main>

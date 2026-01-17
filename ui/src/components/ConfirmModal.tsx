@@ -47,9 +47,9 @@ export function ConfirmModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-      <div className="glass-strong rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl animate-scale-in">
+      <div className="glass-strong  p-8 max-w-md w-full mx-4 shadow-2xl animate-scale-in">
         {/* Icon */}
-        <div className={`w-16 h-16 mx-auto mb-6 rounded-full ${styles.iconBg} flex items-center justify-center animate-bounce-subtle`}>
+        <div className={`w-16 h-16 mx-auto mb-6  ${styles.iconBg} flex items-center justify-center animate-bounce-subtle`}>
           <span className="text-3xl">{styles.icon}</span>
         </div>
 
@@ -60,14 +60,14 @@ export function ConfirmModal({
           <button
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 px-6 py-3.5 glass-card rounded-xl text-white font-medium transition-all duration-200 hover:bg-white/10 hover:scale-105 active:scale-95 disabled:opacity-50"
+            className="flex-1 px-6 py-3.5 glass-card  text-white font-medium transition-all duration-200 hover:bg-white/10 hover:scale-105 active:scale-95 disabled:opacity-50 focus-ring btn-press"
           >
             {cancelLabel}
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className={`flex-1 px-6 py-3.5 ${styles.button} disabled:from-gray-600 disabled:to-gray-700 rounded-xl text-white font-semibold transition-all duration-200 hover:scale-105 active:scale-95`}
+            className={`flex-1 px-6 py-3.5 ${styles.button} disabled:from-gray-600 disabled:to-gray-700  text-white font-semibold transition-all duration-200 hover:scale-105 active:scale-95 focus-ring btn-press`}
           >
             {isLoading ? (loadingLabel || 'Loading...') : confirmLabel}
           </button>

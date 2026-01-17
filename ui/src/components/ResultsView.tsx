@@ -466,7 +466,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       </div>
 
       {/* Results list */}
-      <div ref={containerRef} className="flex-1 overflow-auto p-6 pb-32 custom-scrollbar">
+      <div ref={containerRef} className="flex-1 overflow-auto p-6 pb-32 custom-scrollbar scroll-shadow">
         {renderContent()}
       </div>
 

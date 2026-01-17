@@ -119,17 +119,17 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className="fixed left-1/2 top-1/2 z-50 w-[600px] -translate-x-1/2 -translate-y-1/2"
           >
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#0a0a12]/95 shadow-2xl backdrop-blur-xl">
+            <div className="relative overflow-hidden  border border-white/10 bg-[#0a0a12]/95 shadow-2xl backdrop-blur-xl">
               {/* Ambient glow */}
-              <div className="pointer-events-none absolute -top-32 -right-32 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
-              <div className="pointer-events-none absolute -bottom-32 -left-32 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
+              <div className="pointer-events-none absolute -top-32 -right-32 h-64 w-64  bg-cyan-500/10 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-32 -left-32 h-64 w-64  bg-purple-500/10 blur-3xl" />
 
               {/* Header */}
               <div className="relative flex items-center justify-between border-b border-white/5 px-6 py-4">
                 <h2 className="text-lg font-semibold text-white">Settings</h2>
                 <button
                   onClick={onClose}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/10 hover:text-white"
+                  className="flex h-8 w-8 items-center justify-center  text-slate-400 transition hover:bg-white/10 hover:text-white focus-ring btn-press"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -180,7 +180,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                         </div>
 
                         {/* Threshold */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                        <div className=" border border-white/10 bg-white/[0.02] p-4">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium text-white">Similarity Threshold</p>
@@ -193,7 +193,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                                 max="20"
                                 value={settings.defaultThreshold}
                                 onChange={(e) => setSettings(s => ({ ...s, defaultThreshold: parseInt(e.target.value) }))}
-                                className="h-1.5 w-24 cursor-pointer appearance-none rounded-full bg-white/10 accent-cyan-400"
+                                className="h-1.5 w-24 cursor-pointer appearance-none  bg-white/10 accent-cyan-400"
                               />
                               <span className="w-8 text-right text-sm font-medium text-cyan-300">{settings.defaultThreshold}</span>
                             </div>
@@ -201,7 +201,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                         </div>
 
                         {/* Algorithm */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                        <div className=" border border-white/10 bg-white/[0.02] p-4">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium text-white">Hash Algorithm</p>
@@ -210,7 +210,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                             <select
                               value={settings.defaultAlgorithm}
                               onChange={(e) => setSettings(s => ({ ...s, defaultAlgorithm: e.target.value }))}
-                              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500/50"
+                              className=" border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white outline-none focus:border-cyan-500/50"
                             >
                               <option value="difference">Difference (Fast)</option>
                               <option value="average">Average</option>
@@ -229,7 +229,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                         </div>
 
                         {/* Confirm before trash */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                        <div className=" border border-white/10 bg-white/[0.02] p-4">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium text-white">Confirm Before Trash</p>
@@ -237,7 +237,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                             </div>
                             <button
                               onClick={() => setSettings(s => ({ ...s, confirmBeforeTrash: !s.confirmBeforeTrash }))}
-                              className={`relative h-6 w-11 rounded-full border transition ${
+                              className={`relative h-6 w-11  border transition ${
                                 settings.confirmBeforeTrash
                                   ? 'border-cyan-400/40 bg-cyan-500/40'
                                   : 'border-white/10 bg-white/5'
@@ -246,14 +246,14 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                               <motion.span
                                 animate={{ x: settings.confirmBeforeTrash ? 20 : 0 }}
                                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-lg"
+                                className="absolute left-1 top-1 h-4 w-4  bg-white shadow-lg"
                               />
                             </button>
                           </div>
                         </div>
 
                         {/* Include hidden */}
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                        <div className=" border border-white/10 bg-white/[0.02] p-4">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium text-white">Include Hidden Files</p>
@@ -261,7 +261,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                             </div>
                             <button
                               onClick={() => setSettings(s => ({ ...s, includeHidden: !s.includeHidden }))}
-                              className={`relative h-6 w-11 rounded-full border transition ${
+                              className={`relative h-6 w-11  border transition ${
                                 settings.includeHidden
                                   ? 'border-cyan-400/40 bg-cyan-500/40'
                                   : 'border-white/10 bg-white/5'
@@ -270,7 +270,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                               <motion.span
                                 animate={{ x: settings.includeHidden ? 20 : 0 }}
                                 transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-lg"
+                                className="absolute left-1 top-1 h-4 w-4  bg-white shadow-lg"
                               />
                             </button>
                           </div>
@@ -288,7 +288,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                       className="space-y-6"
                     >
                       {/* Cache Info */}
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+                      <div className=" border border-white/10 bg-white/[0.02] p-6">
                         <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
                           <HardDrive className="h-3.5 w-3.5" />
                           Hash Cache
@@ -317,7 +317,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                         )}
 
                         {cacheInfo && (
-                          <div className="mt-6 flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
+                          <div className="mt-6 flex items-center gap-2  border border-white/5 bg-white/[0.02] px-3 py-2">
                             <FolderOpen className="h-4 w-4 text-slate-500" />
                             <p className="flex-1 truncate text-xs text-slate-400" title={cacheInfo.path}>
                               {cacheInfo.path}
@@ -327,7 +327,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                       </div>
 
                       {/* Clear Cache */}
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+                      <div className=" border border-white/10 bg-white/[0.02] p-6">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-medium text-white">Clear Cache</p>
@@ -338,7 +338,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                           <button
                             onClick={handleClearCache}
                             disabled={isClearingCache || !cacheInfo}
-                            className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                            className={`flex items-center gap-2  border px-4 py-2 text-sm font-medium transition ${
                               clearSuccess
                                 ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
                                 : 'border-red-400/30 bg-red-500/10 text-red-300 hover:bg-red-500/20'
@@ -357,7 +357,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                       </div>
 
                       {/* Cache explanation */}
-                      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                      <div className=" border border-cyan-500/20 bg-cyan-500/5 p-4">
                         <p className="text-xs text-cyan-200/80">
                           <strong>Tip:</strong> The cache stores perceptual hashes of your photos to speed up future scans.
                           Photos that haven't changed will use cached hashes instead of recomputing them.
@@ -377,8 +377,8 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                       {/* App Info */}
                       <div className="flex flex-col items-center justify-center py-8">
                         <div className="relative">
-                          <div className="absolute -inset-2 rounded-3xl bg-cyan-400/20 blur-xl" />
-                          <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-500 shadow-2xl">
+                          <div className="absolute -inset-2  bg-cyan-400/20 blur-xl" />
+                          <div className="relative flex h-20 w-20 items-center justify-center  bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-500 shadow-2xl">
                             <Zap className="h-10 w-10 text-white" />
                           </div>
                         </div>
@@ -387,7 +387,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                       </div>
 
                       {/* Credits */}
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                      <div className=" border border-white/10 bg-white/[0.02] p-4">
                         <div className="space-y-3 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="text-slate-400">Built with</span>
@@ -406,10 +406,10 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
 
                       {/* Links */}
                       <div className="flex items-center justify-center gap-4">
-                        <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white">
+                        <button className=" border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white focus-ring btn-press">
                           View on GitHub
                         </button>
-                        <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white">
+                        <button className=" border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white focus-ring btn-press">
                           Report Issue
                         </button>
                       </div>

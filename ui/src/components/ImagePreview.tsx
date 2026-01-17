@@ -38,7 +38,7 @@ export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePrevie
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-6 right-6 w-12 h-12 rounded-xl glass-strong flex items-center justify-center text-white hover:bg-white/10 transition-colors z-10"
+        className="absolute top-6 right-6 w-12 h-12  glass-strong flex items-center justify-center text-white hover:bg-white/10 transition-colors z-10 focus-ring btn-press"
       >
         <span className="text-2xl">×</span>
       </button>
@@ -48,18 +48,16 @@ export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePrevie
         className="relative max-w-[90vw] max-h-[85vh] animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Loading spinner */}
+        {/* Loading skeleton */}
         {!loaded && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-          </div>
+          <div className="absolute inset-0 skeleton min-w-[300px] min-h-[300px]" />
         )}
 
         {/* Image */}
         <img
           src={assetUrl}
           alt={fileName}
-          className={`max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl transition-opacity duration-300 ${
+          className={`max-w-full max-h-[85vh] object-contain  shadow-2xl transition-opacity duration-300 ${
             loaded ? 'opacity-100' : 'opacity-0'
           }`}
           onLoad={(e) => {
@@ -70,7 +68,7 @@ export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePrevie
         />
 
         {/* Info bar */}
-        <div className="absolute bottom-0 left-0 right-0 glass-strong rounded-b-xl p-4 flex items-center justify-between">
+        <div className="absolute bottom-0 left-0 right-0 glass-strong  p-4 flex items-center justify-between">
           <div>
             <div className="text-white font-medium truncate max-w-[400px]">{fileName}</div>
             {imageInfo && (
@@ -82,7 +80,7 @@ export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePrevie
 
           <div className="flex items-center gap-3">
             {isSelected !== undefined && (
-              <span className={`text-sm px-3 py-1 rounded-full ${
+              <span className={`text-sm px-3 py-1  ${
                 isSelected
                   ? 'bg-red-500/20 text-red-400'
                   : 'bg-green-500/20 text-green-400'
@@ -94,7 +92,7 @@ export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePrevie
             {onDelete && (
               <button
                 onClick={onDelete}
-                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
+                className={`px-4 py-2  font-medium transition-all duration-200 ${
                   isSelected
                     ? 'glass-card text-white hover:bg-white/10'
                     : 'bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-500 hover:to-red-600'
@@ -108,7 +106,7 @@ export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePrevie
       </div>
 
       {/* File path tooltip */}
-      <div className="absolute bottom-6 left-6 glass-strong rounded-xl px-4 py-2 max-w-[500px]">
+      <div className="absolute bottom-6 left-6 glass-strong  px-4 py-2 max-w-[500px]">
         <div className="text-xs text-gray-500 truncate">{src}</div>
       </div>
     </div>

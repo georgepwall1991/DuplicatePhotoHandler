@@ -41,15 +41,17 @@ body {
 .glass-card {
   background: rgba(20, 20, 30, 0.4);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .glass-card:hover {
-  background: rgba(30, 30, 45, 0.5);
-  border-color: rgba(255, 255, 255, 0.12);
-  transform: translateY(-4px) scale(1.01);
-  box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.7);
+  background: rgba(30, 30, 45, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow:
+    4px 4px 0 0 rgba(139, 92, 246, 0.3),
+    0 20px 40px -20px rgba(0, 0, 0, 0.8);
 }
 
 /* Animated Mesh Background */
@@ -102,6 +104,128 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* Scroll Shadows */
+.scroll-shadow {
+  position: relative;
+}
+
+.scroll-shadow::before,
+.scroll-shadow::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 60px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.scroll-shadow::before {
+  top: 0;
+  background: linear-gradient(to bottom, rgba(2, 2, 5, 0.9), transparent);
+}
+
+.scroll-shadow::after {
+  bottom: 0;
+  background: linear-gradient(to top, rgba(2, 2, 5, 0.9), transparent);
+}
+
+/* Shimmer Effect for Skeleton Loading */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Skeleton base */
+.skeleton {
+  background: rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Button press effect */
+.btn-press {
+  transition: all 0.15s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+/* Success pulse animation */
+@keyframes success-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.success-pulse {
+  animation: success-pulse 0.4s ease-out;
+}
+
+/* Celebration confetti keyframes */
+@keyframes confetti-fall {
+  0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* Focus ring for accessibility */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.5);
+}
+
+/* Brutalist border accent */
+.brutalist-accent {
+  position: relative;
+}
+
+.brutalist-accent::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  z-index: -1;
+  transition: all 0.2s ease;
+}
+
+.brutalist-accent:hover::after {
+  bottom: -4px;
+  right: -4px;
 }
 
 /* Noise texture */

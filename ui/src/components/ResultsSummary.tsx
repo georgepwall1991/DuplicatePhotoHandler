@@ -47,11 +47,11 @@ export function ResultsSummary({ totalPhotos, duplicateGroups, potentialSavingsB
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.1 }}
           whileHover={{ y: -4 }}
-          className={`flex-1 glass-card rounded-3xl p-6 border-white/5 relative overflow-hidden group`}
+          className={`flex-1 glass-card  p-6 border-white/5 relative overflow-hidden group`}
         >
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-3">
-              <div className={`p-2 rounded-xl ${stat.bg} ${stat.color}`}>
+              <div className={`p-2  ${stat.bg} ${stat.color}`}>
                 <stat.icon className="w-4 h-4" />
               </div>
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{stat.label}</span>

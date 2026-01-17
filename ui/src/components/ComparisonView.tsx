@@ -38,21 +38,26 @@ function ImagePanel({
 
   if (isLoading || !info) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center glass-card rounded-2xl p-6">
-        <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-        <p className="text-gray-500 mt-4">Loading...</p>
+      <div className="flex-1 flex flex-col glass-card overflow-hidden">
+        <div className="flex-1 skeleton min-h-[300px]" />
+        <div className="p-4 border-t border-white/5">
+          <div className="h-4 w-16 skeleton mb-2" />
+          <div className="h-5 w-32 skeleton mb-3" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-10 skeleton" />
+            <div className="h-10 skeleton" />
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className={`flex-1 flex flex-col glass-card rounded-2xl overflow-hidden ${isSelected ? 'ring-2 ring-green-500' : ''}`}>
+    <div className={`flex-1 flex flex-col glass-card  overflow-hidden ${isSelected ? 'ring-2 ring-green-500' : ''}`}>
       {/* Image */}
       <div className="flex-1 relative bg-black/20 min-h-[300px]">
         {!imageLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-          </div>
+          <div className="absolute inset-0 skeleton" />
         )}
         <img
           src={convertFileSrc(info.path)}
@@ -61,7 +66,7 @@ function ImagePanel({
           onLoad={() => setImageLoaded(true)}
         />
         {isSelected && (
-          <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-green-500/90 text-white text-sm font-medium">
+          <div className="absolute top-3 right-3 px-3 py-1  bg-green-500/90 text-white text-sm font-medium">
             Keep
           </div>
         )}
@@ -159,7 +164,7 @@ export function ComparisonView({
           <h2 className="text-2xl font-semibold text-white">Compare Photos</h2>
           <button
             onClick={onClose}
-            className="w-10 h-10 rounded-xl glass-card flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            className="w-10 h-10  glass-card flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors focus-ring btn-press"
           >
             ✕
           </button>
@@ -183,7 +188,7 @@ export function ComparisonView({
 
         {/* Difference summary */}
         {leftInfo && rightInfo && (
-          <div className="glass-card rounded-xl p-4 text-center">
+          <div className="glass-card  p-4 text-center">
             {leftPixels === rightPixels ? (
               <span className="text-gray-400">Both photos have the same resolution</span>
             ) : leftIsBetter ? (
@@ -202,29 +207,29 @@ export function ComparisonView({
         <div className="flex items-center justify-center gap-4">
           <button
             onClick={onKeepLeft}
-            className="px-6 py-3 rounded-xl glass-card text-white font-medium transition-all hover:bg-green-500/20 hover:border-green-500/50 flex items-center gap-2"
+            className="px-6 py-3  glass-card text-white font-medium transition-all hover:bg-green-500/20 hover:border-green-500/50 flex items-center gap-2 focus-ring btn-press"
           >
             <span className="text-gray-500">←</span> Keep Photo A
-            <kbd className="ml-2 px-1.5 py-0.5 rounded bg-white/10 text-xs text-gray-400">1</kbd>
+            <kbd className="ml-2 px-1.5 py-0.5  bg-white/10 text-xs text-gray-400">1</kbd>
           </button>
           <button
             onClick={onKeepBoth}
-            className="px-6 py-3 rounded-xl glass-card text-gray-300 font-medium transition-all hover:bg-white/10"
+            className="px-6 py-3  glass-card text-gray-300 font-medium transition-all hover:bg-white/10 focus-ring btn-press"
           >
             Keep Both
-            <kbd className="ml-2 px-1.5 py-0.5 rounded bg-white/10 text-xs text-gray-400">B</kbd>
+            <kbd className="ml-2 px-1.5 py-0.5  bg-white/10 text-xs text-gray-400">B</kbd>
           </button>
           <button
             onClick={onKeepRight}
-            className="px-6 py-3 rounded-xl glass-card text-white font-medium transition-all hover:bg-green-500/20 hover:border-green-500/50 flex items-center gap-2"
+            className="px-6 py-3  glass-card text-white font-medium transition-all hover:bg-green-500/20 hover:border-green-500/50 flex items-center gap-2 focus-ring btn-press"
           >
             Keep Photo B <span className="text-gray-500">→</span>
-            <kbd className="ml-2 px-1.5 py-0.5 rounded bg-white/10 text-xs text-gray-400">2</kbd>
+            <kbd className="ml-2 px-1.5 py-0.5  bg-white/10 text-xs text-gray-400">2</kbd>
           </button>
         </div>
 
         <p className="text-center text-gray-500 text-sm">
-          Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-400">Esc</kbd> to close
+          Press <kbd className="px-1.5 py-0.5  bg-white/10 text-gray-400">Esc</kbd> to close
         </p>
       </div>
     </div>

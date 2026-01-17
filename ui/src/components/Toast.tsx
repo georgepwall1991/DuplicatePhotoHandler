@@ -73,7 +73,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
       onAnimationComplete={() => {
         setTimeout(() => onRemove(toast.id), toast.duration || 4000)
       }}
-      className={`pointer-events-auto glass-strong rounded-3xl p-5 flex items-center gap-4 min-w-[320px] max-w-[450px] shadow-2xl border ${colors[toast.type]}`}
+      className={`pointer-events-auto glass-strong  p-5 flex items-center gap-4 min-w-[320px] max-w-[450px] shadow-2xl border ${colors[toast.type]}`}
     >
       <div className="flex-shrink-0">
         {icons[toast.type]}
@@ -81,7 +81,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
       <p className="flex-1 text-white text-sm font-semibold tracking-tight">{toast.message}</p>
       <button
         onClick={() => onRemove(toast.id)}
-        className="flex-shrink-0 w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+        className="flex-shrink-0 w-8 h-8  bg-white/5 flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
       >
         <X className="w-4 h-4" />
       </button>

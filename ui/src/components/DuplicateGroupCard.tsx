@@ -47,9 +47,7 @@ function ImageThumbnail({
   return (
     <div className={`relative overflow-hidden bg-white/5 ${className}`} style={style}>
       {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/5">
-          <div className="w-4 h-4 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
-        </div>
+        <div className="absolute inset-0 skeleton" />
       )}
       <img
         src={assetUrl}
@@ -103,13 +101,13 @@ export function DuplicateGroupCard({
   return (
     <motion.div 
       layout
-      className={`glass-card rounded-[2rem] overflow-hidden border-white/5 group/card transition-all duration-500 ${
+      className={`glass-card  overflow-hidden border-white/5 group/card transition-all duration-500 ${
         isFocused ? 'ring-2 ring-purple-500/50' : ''
       }`}
     >
       <button
         onClick={toggleExpand}
-        className="w-full p-6 flex items-center gap-6 text-left"
+        className="w-full p-6 flex items-center gap-6 text-left focus-ring"
       >
         <div className="flex -space-x-4 isolate group/thumbs">
           {group.photos.slice(0, 3).map((photo, i) => (
@@ -120,12 +118,12 @@ export function DuplicateGroupCard({
             >
               <ImageThumbnail
                 src={photo}
-                className="w-16 h-16 rounded-2xl glass-strong border-2 border-[#0a0a0f] shadow-2xl transition-all duration-300"
+                className="w-16 h-16  glass-strong border-2 border-[#0a0a0f] shadow-2xl transition-all duration-300"
               />
             </motion.div>
           ))}
           {group.photos.length > 3 && (
-            <div className="w-16 h-16 rounded-2xl glass-strong border-2 border-[#0a0a0f] flex items-center justify-center text-xs font-black text-purple-400 bg-purple-500/10 z-0">
+            <div className="w-16 h-16  glass-strong border-2 border-[#0a0a0f] flex items-center justify-center text-xs font-black text-purple-400 bg-purple-500/10 z-0">
               +{group.photos.length - 3}
             </div>
           )}
@@ -133,7 +131,7 @@ export function DuplicateGroupCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1.5">
-            <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-lg bg-white/5 text-gray-400 border border-white/5`}>
+            <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1  bg-white/5 text-gray-400 border border-white/5`}>
               {group.match_type.replace(/([A-Z])/g, ' $1').trim()}
             </span>
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
@@ -155,7 +153,7 @@ export function DuplicateGroupCard({
 
           <motion.div 
             animate={{ rotate: expanded ? 180 : 0 }}
-            className={`w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 group-hover/card:bg-white/10 group-hover/card:text-white transition-all`}
+            className={`w-10 h-10  bg-white/5 flex items-center justify-center text-gray-500 group-hover/card:bg-white/10 group-hover/card:text-white transition-all`}
           >
             <ChevronDown className="w-5 h-5" />
           </motion.div>
@@ -180,7 +178,7 @@ export function DuplicateGroupCard({
                     key={photo}
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
-                    className={`group/item flex items-center gap-4 p-4 rounded-2xl transition-all duration-300 ${
+                    className={`group/item flex items-center gap-4 p-4  transition-all duration-300 ${
                       isRepresentative
                         ? 'bg-purple-500/10 border border-purple-500/20'
                         : isSelected
@@ -191,13 +189,13 @@ export function DuplicateGroupCard({
                     <div className="relative">
                       <ImageThumbnail
                         src={photo}
-                        className="w-20 h-20 rounded-xl shadow-xl"
+                        className="w-20 h-20  shadow-xl"
                       />
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => onPreviewImage?.(photo)}
-                        className="absolute inset-0 bg-black/40 opacity-0 group-hover/item:opacity-100 flex items-center justify-center rounded-xl transition-opacity"
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover/item:opacity-100 flex items-center justify-center  transition-opacity"
                       >
                         <Maximize2 className="w-6 h-6 text-white" />
                       </motion.button>
@@ -207,7 +205,7 @@ export function DuplicateGroupCard({
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-bold text-white truncate">{getFileName(photo)}</span>
                         {isRepresentative && (
-                          <div className="px-2 py-0.5 rounded-md bg-purple-500 text-[8px] font-black uppercase tracking-widest text-white">
+                          <div className="px-2 py-0.5  bg-purple-500 text-[8px] font-black uppercase tracking-widest text-white">
                             Optimal
                           </div>
                         )}
@@ -221,7 +219,7 @@ export function DuplicateGroupCard({
                           whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
                           onClick={() => onToggleFile(photo)}
-                          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${
+                          className={`flex items-center gap-2 px-4 py-2  font-bold text-[10px] uppercase tracking-widest transition-all ${
                             isSelected
                               ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
                               : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
@@ -233,7 +231,7 @@ export function DuplicateGroupCard({
                       )}
                       
                       {isRepresentative && (
-                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest bg-purple-500/20 text-purple-400 border border-purple-500/20">
+                        <div className="flex items-center gap-2 px-4 py-2  font-bold text-[10px] uppercase tracking-widest bg-purple-500/20 text-purple-400 border border-purple-500/20">
                           <Star className="w-3 h-3 fill-current" />
                           Keeper
                         </div>
@@ -253,7 +251,7 @@ export function DuplicateGroupCard({
                   {group.photos.length >= 2 && onCompare && (
                     <button
                       onClick={() => onCompare(group.representative, group.photos.find(p => p !== group.representative)!)}
-                      className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-400/10 rounded-xl transition-colors"
+                      className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-400/10  transition-colors focus-ring btn-press"
                     >
                       <Columns className="w-3 h-3" />
                       Side-by-Side
@@ -267,7 +265,7 @@ export function DuplicateGroupCard({
                         }
                       })
                     }}
-                    className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/10 rounded-xl transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/10  transition-colors focus-ring btn-press"
                   >
                     <Check className="w-3 h-3" />
                     Select All

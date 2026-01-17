@@ -9,11 +9,11 @@ interface ScanButtonProps {
 export function ScanButton({ isReady, onClick }: ScanButtonProps) {
   return (
     <motion.button
-      whileHover={isReady ? { scale: 1.05 } : {}}
-      whileTap={isReady ? { scale: 0.95 } : {}}
+      whileHover={isReady ? { scale: 1.02, y: -4 } : {}}
+      whileTap={isReady ? { scale: 0.98 } : {}}
       onClick={onClick}
       disabled={!isReady}
-      className={`group relative w-64 h-64 rounded-full transition-all duration-700 ${
+      className={`group relative w-56 h-56 transition-all duration-700 ${
         !isReady ? 'opacity-40 grayscale-[0.8] cursor-not-allowed' : 'cursor-pointer'
       }`}
     >
@@ -24,14 +24,14 @@ export function ScanButton({ isReady, onClick }: ScanButtonProps) {
           opacity: [0.3, 0.6, 0.3],
         } : {}}
         transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute -inset-8 rounded-full bg-purple-500/20 blur-3xl"
+        className="absolute -inset-8 bg-purple-500/20 blur-3xl"
       />
 
-      {/* Rotating Ring */}
-      <div className="absolute inset-0 rounded-full border-2 border-dashed border-purple-500/20 group-hover:border-purple-500/40 animate-[spin_20s_linear_infinite]" />
+      {/* Rotating Ring - now square */}
+      <div className="absolute inset-0 border-2 border-dashed border-purple-500/20 group-hover:border-purple-500/40 animate-[spin_20s_linear_infinite]" />
 
       {/* Main Button Body */}
-      <div className="absolute inset-4 rounded-full glass-strong border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden">
+      <div className="absolute inset-4 glass-strong border-2 border-white/10 shadow-2xl flex items-center justify-center overflow-hidden">
         {/* Interior Gradient */}
         <div className={`absolute inset-0 bg-gradient-to-br transition-opacity duration-700 ${
           isReady ? 'from-purple-600/20 to-blue-600/20 opacity-100' : 'from-gray-800/20 to-gray-900/20 opacity-50'
@@ -77,9 +77,9 @@ export function ScanButton({ isReady, onClick }: ScanButtonProps) {
       {/* Outer Pulse Ring */}
       {isReady && (
         <motion.div
-          animate={{ scale: [1, 1.4], opacity: [0.5, 0] }}
+          animate={{ scale: [1, 1.2], opacity: [0.5, 0] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-          className="absolute inset-0 rounded-full border border-purple-500/50"
+          className="absolute inset-0 border-2 border-purple-500/50"
         />
       )}
     </motion.button>

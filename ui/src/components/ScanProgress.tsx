@@ -49,7 +49,7 @@ export function ScanProgress({
           key={phase}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 rounded-xl border border-purple-500/20 text-purple-400 mb-6"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10  border border-purple-500/20 text-purple-400 mb-6"
         >
           <Activity className="w-4 h-4 animate-pulse" />
           <span className="text-xs font-black uppercase tracking-widest">{phase}</span>
@@ -69,7 +69,7 @@ export function ScanProgress({
       <div className="grid grid-cols-2 gap-6 w-full max-w-xl mb-12">
         <motion.div 
           whileHover={{ scale: 1.02 }}
-          className="glass-card rounded-[2rem] p-8 border-white/5 relative overflow-hidden group"
+          className="glass-card  p-8 border-white/5 relative overflow-hidden group"
         >
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Images className="w-12 h-12 text-blue-400" />
@@ -82,7 +82,7 @@ export function ScanProgress({
 
         <motion.div 
           whileHover={{ scale: 1.02 }}
-          className="glass-card rounded-[2rem] p-8 border-white/5 relative overflow-hidden group"
+          className="glass-card  p-8 border-white/5 relative overflow-hidden group"
         >
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Layers className="w-12 h-12 text-purple-400" />
@@ -100,7 +100,7 @@ export function ScanProgress({
         whileTap={{ scale: 0.95 }}
         onClick={onCancel}
         disabled={isCancelling}
-        className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-gray-400 hover:text-red-400 hover:bg-red-400/10 hover:border-red-400/20 transition-all duration-300 group"
+        className="flex items-center gap-3 px-8 py-4  bg-white/5 border border-white/10 text-gray-400 hover:text-red-400 hover:bg-red-400/10 hover:border-red-400/20 transition-all duration-300 group"
       >
         <XCircle className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
         <span className="text-sm font-bold uppercase tracking-widest">

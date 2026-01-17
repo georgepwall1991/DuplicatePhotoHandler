@@ -39,7 +39,7 @@ export function ActionBar({
       exit={{ y: 100 }}
       className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-3xl px-6 z-50"
     >
-      <div className="glass-strong rounded-[2.5rem] p-4 border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] flex items-center justify-between">
+      <div className="glass-strong  p-4 border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] flex items-center justify-between">
         <div className="flex items-center gap-6 pl-4">
           <AnimatePresence mode="wait">
             {selectedCount > 0 ? (
@@ -92,7 +92,7 @@ export function ActionBar({
               whileTap={{ scale: 0.98 }}
               onClick={onUndo}
               disabled={isRestoring}
-              className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-white/5 text-amber-400 border border-amber-500/20 font-black text-[10px] uppercase tracking-widest hover:bg-amber-500/10 transition-all"
+              className="flex items-center gap-3 px-6 py-4  bg-white/5 text-amber-400 border border-amber-500/20 font-black text-[10px] uppercase tracking-widest hover:bg-amber-500/10 transition-all focus-ring"
             >
               <RotateCcw className={`w-4 h-4 ${isRestoring ? 'animate-spin' : ''}`} />
               {isRestoring ? 'Restoring...' : 'Undo Action'}
@@ -105,7 +105,7 @@ export function ActionBar({
               whileTap={{ scale: 0.98 }}
               onClick={onTrash}
               disabled={isDeleting}
-              className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-red-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all"
+              className="flex items-center gap-3 px-8 py-4  bg-red-600 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-600/20 hover:bg-red-500 transition-all focus-ring"
             >
               <Trash2 className="w-4 h-4" />
               {isDeleting ? 'Processing...' : 'Purge Selected'}

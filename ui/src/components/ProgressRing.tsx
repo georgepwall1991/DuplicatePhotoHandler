@@ -24,10 +24,10 @@ export function ProgressRing({
           scale: [1, 1.05, 1],
         }}
         transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute inset-0 rounded-full blur-3xl bg-purple-500/20"
+        className="absolute inset-0  blur-3xl bg-purple-500/20"
       />
 
-      <div className="absolute inset-0 rounded-full border border-white/5 bg-[#0a0a0f]/40 backdrop-blur-md shadow-2xl" />
+      <div className="absolute inset-0  border border-white/5 bg-[#0a0a0f]/40 backdrop-blur-md shadow-2xl" />
 
       {/* SVG Ring */}
       <svg className="absolute inset-0 -rotate-90" width={size} height={size}>
@@ -91,7 +91,7 @@ export function ProgressRing({
       <motion.div 
         animate={{ rotate: 360 }}
         transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-        className="absolute inset-0 rounded-full pointer-events-none"
+        className="absolute inset-0  pointer-events-none"
       >
         <div className="absolute top-0 left-1/2 w-0.5 h-1/2 bg-gradient-to-t from-transparent via-purple-500/50 to-white/80 origin-bottom" />
       </motion.div>
