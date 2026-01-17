@@ -62,3 +62,29 @@ export interface WatcherEvent {
     Error?: { message: string }
   }
 }
+
+// Screenshot confidence level
+export type ScreenshotConfidence = 'high' | 'medium' | 'low'
+
+// Screenshot information
+export interface ScreenshotInfo {
+  path: string
+  size_bytes: number
+  width: number
+  height: number
+  date_taken: string | null
+  confidence: ScreenshotConfidence
+  detection_reason: string
+  source_app: string | null
+}
+
+// Screenshot scan result - returned from scan_screenshots command
+export interface ScreenshotScanResult {
+  all_screenshots: ScreenshotInfo[]
+  duplicate_groups: DuplicateGroup[]
+  total_size_bytes: number
+  scan_duration_ms: number
+}
+
+// Module routing
+export type ActiveModule = 'duplicates' | 'screenshots'
