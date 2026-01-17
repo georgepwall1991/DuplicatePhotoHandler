@@ -12,6 +12,7 @@
 //! - `metadata` - Extracts EXIF metadata from photos
 //! - `quality` - Analyzes image quality (sharpness, contrast)
 //! - `watcher` - Monitors folders for file changes
+//! - `screenshot` - Detects screenshots using multiple methods
 
 pub mod cache;
 pub mod comparator;
@@ -21,6 +22,7 @@ pub mod pipeline;
 pub mod quality;
 pub mod reporter;
 pub mod scanner;
+pub mod screenshot;
 pub mod watcher;
 
 // Re-export commonly used types
@@ -30,3 +32,4 @@ pub use metadata::PhotoMetadata;
 pub use quality::QualityScore;
 pub use reporter::{DuplicateExplanation, GroupReport};
 pub use scanner::PhotoFile;
+pub use screenshot::{ScreenshotConfidence, ScreenshotInfo};
