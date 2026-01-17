@@ -1,11 +1,116 @@
 //! Groups duplicate photos into clusters using transitive relationships.
 //!
+//! # Algorithm
+//!
+//! Uses the Union-Find (Disjoint Set Union) algorithm to efficiently
+//! group photos based on pairwise similarity matches.
+//!
+//! ## Transitive Grouping
+//!
 //! If A matches B and B matches C, then {A, B, C} forms a single group
-//! even if A doesn't directly match C.
+//! even if A doesn't directly match C. This is because similarity is
+//! transitive within a configurable threshold.
+//!
+//! ## Complexity
+//!
+//! - Time: O(n * α(n)) where α is the inverse Ackermann function (~constant)
+//! - Space: O(n) for the parent map
+//!
+//! # Example
+//!
+//! ```text
+//! Matches: (A,B), (B,C), (X,Y)
+//! Result:  Group1{A,B,C}, Group2{X,Y}
+//! ```
 
 use super::{DuplicateGroup, MatchResult, MatchType};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+
+/// Union-Find data structure for grouping paths.
+///
+/// Uses path compression for near-constant time operations.
+struct UnionFind {
+    parent: HashMap<PathBuf, PathBuf>,
+}
+
+impl UnionFind {
+    /// Create a new UnionFind with the given items
+    fn new(items: impl IntoIterator<Item = PathBuf>) -> Self {
+        let mut parent = HashMap::new();
+        for item in items {
+            parent.insert(item.clone(), item);
+        }
+        Self { parent }
+    }
+
+    /// Find the root of an item with path compression
+    fn find(&mut self, x: &PathBuf) -> PathBuf {
+        let p = self.parent.get(x).cloned().unwrap_or_else(|| x.clone());
+        if &p != x {
+            let root = self.find(&p);
+            self.parent.insert(x.clone(), root.clone());
+            root
+        } else {
+            x.clone()
+        }
+    }
+
+    /// Union two sets, making them share the same root
+    fn union(&mut self, a: &PathBuf, b: &PathBuf) {
+        let root_a = self.find(a);
+        let root_b = self.find(b);
+        if root_a != root_b {
+            self.parent.insert(root_a, root_b);
+        }
+    }
+
+    /// Group all items by their root
+    fn groups(&mut self) -> HashMap<PathBuf, Vec<PathBuf>> {
+        let items: Vec<_> = self.parent.keys().cloned().collect();
+        let mut groups: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+        for item in items {
+            let root = self.find(&item);
+            groups.entry(root).or_default().push(item);
+        }
+        groups
+    }
+}
+
+/// Tracks aggregate match statistics for a group
+#[derive(Clone)]
+struct GroupStats {
+    total_distance: f64,
+    match_count: usize,
+    best_match_type: MatchType,
+}
+
+impl GroupStats {
+    fn new() -> Self {
+        Self {
+            total_distance: 0.0,
+            match_count: 0,
+            best_match_type: MatchType::MaybeSimilar,
+        }
+    }
+
+    fn add_match(&mut self, distance: u32, match_type: MatchType) {
+        self.total_distance += distance as f64;
+        self.match_count += 1;
+        // Keep the best (lowest ordinal = more exact) match type
+        if (match_type as u8) < (self.best_match_type as u8) {
+            self.best_match_type = match_type;
+        }
+    }
+
+    fn average_distance(&self) -> f64 {
+        if self.match_count > 0 {
+            self.total_distance / self.match_count as f64
+        } else {
+            0.0
+        }
+    }
+}
 
 /// Groups photos into duplicate clusters using transitive relationships
 pub struct TransitiveGrouper;
@@ -16,6 +121,44 @@ impl TransitiveGrouper {
         Self
     }
 
+    /// Collect all unique photos from matches
+    fn collect_photos(matches: &[MatchResult]) -> HashSet<PathBuf> {
+        let mut photos = HashSet::new();
+        for m in matches {
+            photos.insert(m.photo_a.clone());
+            photos.insert(m.photo_b.clone());
+        }
+        photos
+    }
+
+    /// Build statistics for each group based on matches
+    fn build_group_stats(
+        matches: &[MatchResult],
+        uf: &mut UnionFind,
+    ) -> HashMap<PathBuf, GroupStats> {
+        let mut stats: HashMap<PathBuf, GroupStats> = HashMap::new();
+        for m in matches {
+            let root = uf.find(&m.photo_a);
+            stats
+                .entry(root)
+                .or_insert_with(GroupStats::new)
+                .add_match(m.distance, m.match_type);
+        }
+        stats
+    }
+
+    /// Convert a grouped set of photos into a DuplicateGroup
+    fn build_duplicate_group(
+        mut photos: Vec<PathBuf>,
+        stats: &GroupStats,
+    ) -> DuplicateGroup {
+        photos.sort(); // Deterministic ordering
+        let representative = photos[0].clone();
+        let mut group = DuplicateGroup::new(photos, representative, stats.best_match_type);
+        group.average_distance = stats.average_distance();
+        group
+    }
+
     /// Group match results into duplicate clusters
     ///
     /// Uses union-find to efficiently group photos transitively.
@@ -24,102 +167,27 @@ impl TransitiveGrouper {
             return Vec::new();
         }
 
-        // Collect all unique photos
-        let mut photos: HashSet<PathBuf> = HashSet::new();
-        for m in matches {
-            photos.insert(m.photo_a.clone());
-            photos.insert(m.photo_b.clone());
-        }
-
-        // Create union-find structure
-        let mut parent: HashMap<PathBuf, PathBuf> = HashMap::new();
-        for photo in &photos {
-            parent.insert(photo.clone(), photo.clone());
-        }
-
-        // Find root with path compression
-        fn find(parent: &mut HashMap<PathBuf, PathBuf>, x: &PathBuf) -> PathBuf {
-            let p = parent.get(x).unwrap().clone();
-            if &p != x {
-                let root = find(parent, &p);
-                parent.insert(x.clone(), root.clone());
-                root
-            } else {
-                x.clone()
-            }
-        }
-
-        // Union two sets
-        fn union(parent: &mut HashMap<PathBuf, PathBuf>, a: &PathBuf, b: &PathBuf) {
-            let root_a = find(parent, a);
-            let root_b = find(parent, b);
-            if root_a != root_b {
-                parent.insert(root_a, root_b);
-            }
-        }
+        // Build union-find structure from all photos
+        let photos = Self::collect_photos(matches);
+        let mut uf = UnionFind::new(photos);
 
         // Union all matching pairs
         for m in matches {
-            union(&mut parent, &m.photo_a, &m.photo_b);
+            uf.union(&m.photo_a, &m.photo_b);
         }
 
-        // Group photos by their root
-        let mut groups: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
-        for photo in &photos {
-            let root = find(&mut parent, photo);
-            groups.entry(root).or_default().push(photo.clone());
-        }
-
-        // Build match info for each group
-        let mut match_info: HashMap<PathBuf, (f64, MatchType)> = HashMap::new();
-        for m in matches {
-            let root = find(&mut parent, &m.photo_a);
-            let entry = match_info.entry(root).or_insert((0.0, MatchType::MaybeSimilar));
-
-            // Track worst (highest) match type and running average distance
-            entry.0 += m.distance as f64;
-            if (m.match_type as u8) < (entry.1 as u8) {
-                entry.1 = m.match_type;
-            }
-        }
+        // Get statistics for each group
+        let stats = Self::build_group_stats(matches, &mut uf);
 
         // Convert to DuplicateGroups
-        let mut result = Vec::new();
-        for (root, mut group_photos) in groups {
-            if group_photos.len() < 2 {
-                continue; // Not a duplicate group
-            }
-
-            // Sort by path for deterministic ordering
-            group_photos.sort();
-
-            // Get match info
-            let (total_distance, match_type) = match_info
-                .get(&root)
-                .copied()
-                .unwrap_or((0.0, MatchType::Similar));
-
-            let match_count = matches
-                .iter()
-                .filter(|m| find(&mut parent.clone(), &m.photo_a) == root)
-                .count();
-
-            let avg_distance = if match_count > 0 {
-                total_distance / match_count as f64
-            } else {
-                0.0
-            };
-
-            // Select representative (first one for now, could be improved)
-            let representative = group_photos[0].clone();
-
-            let mut group = DuplicateGroup::new(group_photos, representative, match_type);
-            group.average_distance = avg_distance;
-
-            result.push(group);
-        }
-
-        result
+        uf.groups()
+            .into_iter()
+            .filter(|(_, photos)| photos.len() >= 2)
+            .map(|(root, photos)| {
+                let group_stats = stats.get(&root).cloned().unwrap_or_else(GroupStats::new);
+                Self::build_duplicate_group(photos, &group_stats)
+            })
+            .collect()
     }
 }
 
@@ -222,5 +290,81 @@ mod tests {
 
         // 3 photos, 2 duplicates
         assert_eq!(groups[0].duplicate_count(), 2);
+    }
+
+    #[test]
+    fn union_find_basic_operations() {
+        let a = PathBuf::from("/a.jpg");
+        let b = PathBuf::from("/b.jpg");
+        let c = PathBuf::from("/c.jpg");
+
+        let mut uf = UnionFind::new(vec![a.clone(), b.clone(), c.clone()]);
+
+        // Initially each element is its own parent
+        assert_eq!(uf.find(&a), a);
+        assert_eq!(uf.find(&b), b);
+
+        // After union, they should have the same root
+        uf.union(&a, &b);
+        assert_eq!(uf.find(&a), uf.find(&b));
+
+        // C is still separate
+        assert_ne!(uf.find(&a), uf.find(&c));
+
+        // Union A-C through transitivity (A already connected to B)
+        uf.union(&b, &c);
+        assert_eq!(uf.find(&a), uf.find(&c));
+    }
+
+    #[test]
+    fn complex_transitive_chain() {
+        // A~B, C~D, B~C should create one group {A, B, C, D}
+        let grouper = TransitiveGrouper::new();
+        let matches = vec![
+            create_match("/a.jpg", "/b.jpg", 1),
+            create_match("/c.jpg", "/d.jpg", 2),
+            create_match("/b.jpg", "/c.jpg", 3), // Links the two pairs
+        ];
+
+        let groups = grouper.group(&matches);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].photos.len(), 4);
+    }
+
+    #[test]
+    fn best_match_type_is_preserved() {
+        // When grouping photos with different match types, best should be preserved
+        let grouper = TransitiveGrouper::new();
+        let matches = vec![
+            create_match("/a.jpg", "/b.jpg", 0),  // Exact
+            create_match("/b.jpg", "/c.jpg", 10), // Similar
+        ];
+
+        let groups = grouper.group(&matches);
+
+        // The group should have the "best" match type (Exact)
+        assert_eq!(groups[0].match_type, MatchType::Exact);
+    }
+
+    #[test]
+    fn large_group_handling() {
+        // Test with a larger group to ensure no performance issues
+        let grouper = TransitiveGrouper::new();
+        let mut matches = Vec::new();
+
+        // Create a chain: 1~2, 2~3, 3~4, ... 99~100
+        for i in 1..100 {
+            matches.push(create_match(
+                &format!("/{}.jpg", i),
+                &format!("/{}.jpg", i + 1),
+                0,
+            ));
+        }
+
+        let groups = grouper.group(&matches);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].photos.len(), 100);
     }
 }

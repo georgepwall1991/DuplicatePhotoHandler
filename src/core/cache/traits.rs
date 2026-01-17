@@ -21,6 +21,18 @@ pub trait CacheBackend: Send + Sync {
     /// Store a hash in the cache
     fn set(&self, entry: CacheEntry) -> Result<(), CacheError>;
 
+    /// Store multiple hashes in the cache in a single transaction.
+    ///
+    /// This is significantly faster than calling `set` multiple times
+    /// due to reduced transaction overhead.
+    fn set_batch(&self, entries: &[CacheEntry]) -> Result<(), CacheError> {
+        // Default implementation: just call set for each entry
+        for entry in entries {
+            self.set(entry.clone())?;
+        }
+        Ok(())
+    }
+
     /// Remove a specific entry
     fn remove(&self, path: &Path) -> Result<(), CacheError>;
 

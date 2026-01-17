@@ -9,6 +9,9 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// SQLite-backed persistent cache
+///
+/// Uses WAL (Write-Ahead Logging) mode for better concurrent access.
+/// WAL allows readers to proceed even while writes are happening.
 pub struct SqliteCache {
     conn: Mutex<Connection>,
     db_path: PathBuf,
@@ -30,6 +33,11 @@ impl SqliteCache {
             reason: e.to_string(),
         })?;
 
+        // Enable WAL mode for better concurrent access
+        // WAL allows readers to proceed even while writes are happening
+        conn.execute_batch("PRAGMA journal_mode=WAL;")
+            .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
         // Create table if it doesn't exist
         conn.execute(
             "CREATE TABLE IF NOT EXISTS hashes (
@@ -47,6 +55,17 @@ impl SqliteCache {
         // Create index for faster lookups
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_path ON hashes(path)",
+            [],
+        )
+        .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+        // Create scan state table for incremental scanning
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS scan_state (
+                directory TEXT PRIMARY KEY,
+                last_scan_time INTEGER NOT NULL,
+                file_count INTEGER NOT NULL
+            )",
             [],
         )
         .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
@@ -75,6 +94,7 @@ impl SqliteCache {
             HashAlgorithmKind::Average => "average",
             HashAlgorithmKind::Difference => "difference",
             HashAlgorithmKind::Perceptual => "perceptual",
+            HashAlgorithmKind::Fusion => "fusion",
         }
     }
 
@@ -83,9 +103,69 @@ impl SqliteCache {
         match s {
             "average" => HashAlgorithmKind::Average,
             "perceptual" => HashAlgorithmKind::Perceptual,
+            "fusion" => HashAlgorithmKind::Fusion,
             _ => HashAlgorithmKind::Difference,
         }
     }
+
+    /// Get the last scan time for a directory
+    pub fn get_scan_state(&self, directory: &Path) -> Result<Option<ScanState>, CacheError> {
+        let conn = self.conn.lock().map_err(|_| CacheError::Corrupted {
+            path: self.db_path.clone(),
+        })?;
+
+        let dir_str = directory.to_string_lossy();
+
+        let result: Result<ScanState, _> = conn.query_row(
+            "SELECT last_scan_time, file_count FROM scan_state WHERE directory = ?",
+            [&dir_str],
+            |row| {
+                Ok(ScanState {
+                    directory: directory.to_path_buf(),
+                    last_scan_time: Self::from_timestamp(row.get(0)?),
+                    file_count: row.get::<_, i64>(1)? as usize,
+                })
+            },
+        );
+
+        match result {
+            Ok(state) => Ok(Some(state)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(CacheError::QueryFailed(e.to_string())),
+        }
+    }
+
+    /// Update the scan state for a directory
+    pub fn set_scan_state(&self, state: &ScanState) -> Result<(), CacheError> {
+        let conn = self.conn.lock().map_err(|_| CacheError::Corrupted {
+            path: self.db_path.clone(),
+        })?;
+
+        let dir_str = state.directory.to_string_lossy();
+
+        conn.execute(
+            "INSERT OR REPLACE INTO scan_state (directory, last_scan_time, file_count) VALUES (?, ?, ?)",
+            params![
+                dir_str,
+                Self::to_timestamp(state.last_scan_time),
+                state.file_count as i64,
+            ],
+        )
+        .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
+/// Represents the state of a previous scan
+#[derive(Debug, Clone)]
+pub struct ScanState {
+    /// Directory that was scanned
+    pub directory: PathBuf,
+    /// When the scan was performed
+    pub last_scan_time: SystemTime,
+    /// Number of photos found
+    pub file_count: usize,
 }
 
 impl CacheBackend for SqliteCache {
@@ -155,6 +235,49 @@ impl CacheBackend for SqliteCache {
         Ok(())
     }
 
+    fn set_batch(&self, entries: &[CacheEntry]) -> Result<(), CacheError> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        let mut conn = self.conn.lock().map_err(|_| CacheError::Corrupted {
+            path: self.db_path.clone(),
+        })?;
+
+        // Use a transaction for batch insert (significantly faster)
+        let tx = conn
+            .transaction()
+            .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+        {
+            let mut stmt = tx
+                .prepare_cached(
+                    "INSERT OR REPLACE INTO hashes
+                     (path, hash, algorithm, file_size, file_modified, cached_at)
+                     VALUES (?, ?, ?, ?, ?, ?)",
+                )
+                .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+            for entry in entries {
+                let path_str = entry.path.to_string_lossy();
+                stmt.execute(params![
+                    path_str,
+                    &entry.hash,
+                    Self::algorithm_to_string(entry.algorithm),
+                    entry.file_size as i64,
+                    Self::to_timestamp(entry.file_modified),
+                    Self::to_timestamp(entry.cached_at),
+                ])
+                .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+            }
+        }
+
+        tx.commit()
+            .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+
+        Ok(())
+    }
+
     fn remove(&self, path: &Path) -> Result<(), CacheError> {
         let conn = self.conn.lock().map_err(|_| CacheError::Corrupted {
             path: self.db_path.clone(),
@@ -185,7 +308,9 @@ impl CacheBackend for SqliteCache {
         })?;
 
         let total_entries: usize = conn
-            .query_row("SELECT COUNT(*) FROM hashes", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM hashes", [], |row| {
+                row.get::<_, i64>(0).map(|v| v as usize)
+            })
             .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
 
         let total_size_bytes: u64 = conn
@@ -221,7 +346,6 @@ impl CacheBackend for SqliteCache {
             path: self.db_path.clone(),
         })?;
 
-        // Get all paths
         let mut stmt = conn
             .prepare("SELECT path FROM hashes")
             .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
@@ -234,18 +358,13 @@ impl CacheBackend for SqliteCache {
 
         drop(stmt);
 
-        // Find orphans
-        let orphans: Vec<_> = paths
-            .into_iter()
-            .filter(|p| !Path::new(p).exists())
-            .collect();
-
-        let count = orphans.len();
-
-        // Delete orphans
-        for path in orphans {
-            conn.execute("DELETE FROM hashes WHERE path = ?", [&path])
-                .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+        let mut count = 0;
+        for path in paths {
+            if !Path::new(&path).exists() {
+                conn.execute("DELETE FROM hashes WHERE path = ?", [&path])
+                    .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+                count += 1;
+            }
         }
 
         Ok(count)
@@ -340,6 +459,37 @@ mod tests {
         cache.set(create_entry("/b.jpg")).unwrap();
 
         cache.clear().unwrap();
+
+        let stats = cache.stats().unwrap();
+        assert_eq!(stats.total_entries, 0);
+    }
+
+    #[test]
+    fn sqlite_cache_batch_insert() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("cache.db");
+
+        let cache = SqliteCache::open(&db_path).unwrap();
+
+        let entries: Vec<CacheEntry> = (0..100)
+            .map(|i| create_entry(&format!("/photo_{}.jpg", i)))
+            .collect();
+
+        cache.set_batch(&entries).unwrap();
+
+        let stats = cache.stats().unwrap();
+        assert_eq!(stats.total_entries, 100);
+    }
+
+    #[test]
+    fn sqlite_cache_batch_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("cache.db");
+
+        let cache = SqliteCache::open(&db_path).unwrap();
+
+        // Empty batch should succeed without error
+        cache.set_batch(&[]).unwrap();
 
         let stats = cache.stats().unwrap();
         assert_eq!(stats.total_entries, 0);

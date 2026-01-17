@@ -12,9 +12,11 @@
 //! 3. **Technical**: Hash values, Hamming distance, bit differences
 
 mod explanation;
+pub mod export;
 mod visualization;
 
 pub use explanation::{DuplicateExplanation, DetailedReporter};
+pub use export::{export_csv, export_html, export_to_file, ExportFormat};
 pub use visualization::HashVisualizer;
 
 use serde::{Deserialize, Serialize};

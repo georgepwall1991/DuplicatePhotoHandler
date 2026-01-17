@@ -4,11 +4,67 @@ use super::{filter::ImageFilter, PhotoFile, PhotoScanner, ScanResult};
 use crate::error::ScanError;
 use crate::events::{Event, EventSender, ScanEvent, ScanProgress};
 use std::fs;
-use std::path::PathBuf;
-use walkdir::WalkDir;
+use std::path::{Path, PathBuf};
+use walkdir::{DirEntry, WalkDir};
+
+/// Holds mutable state during directory scanning
+struct ScanContext<'a> {
+    photos: Vec<PhotoFile>,
+    errors: Vec<ScanError>,
+    directories_scanned: usize,
+    events: Option<&'a EventSender>,
+}
+
+impl<'a> ScanContext<'a> {
+    fn new(events: Option<&'a EventSender>) -> Self {
+        Self {
+            photos: Vec::new(),
+            errors: Vec::new(),
+            directories_scanned: 0,
+            events,
+        }
+    }
+
+    fn emit_progress(&self, current_path: &Path) {
+        if let Some(sender) = self.events {
+            sender.send(Event::Scan(ScanEvent::Progress(ScanProgress {
+                directories_scanned: self.directories_scanned,
+                photos_found: self.photos.len(),
+                current_path: current_path.to_path_buf(),
+            })));
+        }
+    }
+
+    fn emit_photo_found(&self, path: &Path) {
+        if let Some(sender) = self.events {
+            sender.send(Event::Scan(ScanEvent::PhotoFound {
+                path: path.to_path_buf(),
+            }));
+        }
+    }
+
+    fn emit_error(&self, path: &Path, message: &str) {
+        if let Some(sender) = self.events {
+            sender.send(Event::Scan(ScanEvent::Error {
+                path: path.to_path_buf(),
+                message: message.to_string(),
+            }));
+        }
+    }
+
+    fn add_photo(&mut self, photo: PhotoFile) {
+        self.emit_photo_found(&photo.path);
+        self.photos.push(photo);
+    }
+
+    fn add_error(&mut self, error: ScanError, path: &Path) {
+        self.emit_error(path, &error.to_string());
+        self.errors.push(error);
+    }
+}
 
 /// Configuration for the directory scanner
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ScanConfig {
     /// Whether to follow symbolic links
     pub follow_symlinks: bool,
@@ -18,17 +74,8 @@ pub struct ScanConfig {
     pub max_depth: Option<usize>,
     /// Custom extensions to include (None = use defaults)
     pub extensions: Option<Vec<String>>,
-}
-
-impl Default for ScanConfig {
-    fn default() -> Self {
-        Self {
-            follow_symlinks: false,
-            include_hidden: false,
-            max_depth: None,
-            extensions: None,
-        }
-    }
+    /// Enable incremental mode (track scan state for faster subsequent scans)
+    pub incremental: bool,
 }
 
 /// Scanner implementation using the walkdir crate
@@ -49,26 +96,85 @@ impl WalkDirScanner {
         Self { config, filter }
     }
 
+    /// Check if a directory should be skipped (hidden directory check)
+    fn should_skip_directory(&self, path: &Path, root: &Path) -> bool {
+        if self.config.include_hidden {
+            return false;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            return false;
+        };
+        name.starts_with('.') && path != root
+    }
+
+    /// Process a directory entry
+    fn process_directory(&self, entry: &DirEntry, root: &Path, ctx: &mut ScanContext) {
+        let path = entry.path();
+        ctx.directories_scanned += 1;
+
+        if !self.should_skip_directory(path, root) {
+            ctx.emit_progress(path);
+        }
+    }
+
+    /// Process a file entry, adding it as a photo if it matches the filter
+    fn process_file(&self, entry: &DirEntry, ctx: &mut ScanContext) {
+        let path = entry.path();
+
+        if !self.filter.should_include(path) {
+            return;
+        }
+
+        match fs::metadata(path) {
+            Ok(metadata) => {
+                let photo = PhotoFile {
+                    path: path.to_path_buf(),
+                    size: metadata.len(),
+                    modified: metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+                    format: self.filter.get_format(path),
+                };
+                ctx.add_photo(photo);
+            }
+            Err(e) => {
+                let error = ScanError::ReadDirectory {
+                    path: path.to_path_buf(),
+                    source: e,
+                };
+                ctx.add_error(error, path);
+            }
+        }
+    }
+
+    /// Handle a walkdir error
+    fn handle_walk_error(&self, error: walkdir::Error, ctx: &mut ScanContext) {
+        let path = error.path().map(|p| p.to_path_buf()).unwrap_or_default();
+        let scan_error = self.convert_walk_error(&error, &path);
+        ctx.add_error(scan_error, &path);
+    }
+
+    /// Convert a walkdir error to a ScanError
+    fn convert_walk_error(&self, error: &walkdir::Error, path: &Path) -> ScanError {
+        if error.io_error().map(|e| e.kind()) == Some(std::io::ErrorKind::PermissionDenied) {
+            ScanError::PermissionDenied { path: path.to_path_buf() }
+        } else {
+            ScanError::ReadDirectory {
+                path: path.to_path_buf(),
+                source: std::io::Error::other(error.to_string()),
+            }
+        }
+    }
+
     /// Scan a single directory
     fn scan_directory(
         &self,
         root: &PathBuf,
         events: Option<&EventSender>,
     ) -> Result<(Vec<PhotoFile>, Vec<ScanError>), ScanError> {
-        // Verify the directory exists
-        if !root.exists() {
+        if !root.exists() || !root.is_dir() {
             return Err(ScanError::DirectoryNotFound { path: root.clone() });
         }
 
-        if !root.is_dir() {
-            return Err(ScanError::DirectoryNotFound { path: root.clone() });
-        }
-
-        let mut photos = Vec::new();
-        let mut errors = Vec::new();
-        let mut directories_scanned = 0;
-
-        // Configure walkdir
+        let mut ctx = ScanContext::new(events);
         let mut walker = WalkDir::new(root).follow_links(self.config.follow_symlinks);
 
         if let Some(depth) = self.config.max_depth {
@@ -77,107 +183,19 @@ impl WalkDirScanner {
 
         for entry_result in walker {
             match entry_result {
+                Ok(entry) if entry.path().is_dir() => {
+                    self.process_directory(&entry, root, &mut ctx);
+                }
                 Ok(entry) => {
-                    let path = entry.path();
-
-                    // Track directories
-                    if path.is_dir() {
-                        directories_scanned += 1;
-
-                        // Skip hidden directories unless configured otherwise
-                        if !self.config.include_hidden {
-                            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                if name.starts_with('.') && path != root.as_path() {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        // Send progress event
-                        if let Some(sender) = events {
-                            sender.send(Event::Scan(ScanEvent::Progress(ScanProgress {
-                                directories_scanned,
-                                photos_found: photos.len(),
-                                current_path: path.to_path_buf(),
-                            })));
-                        }
-
-                        continue;
-                    }
-
-                    // Check if this file should be included
-                    if !self.filter.should_include(path) {
-                        continue;
-                    }
-
-                    // Get file metadata
-                    match fs::metadata(path) {
-                        Ok(metadata) => {
-                            let photo = PhotoFile {
-                                path: path.to_path_buf(),
-                                size: metadata.len(),
-                                modified: metadata
-                                    .modified()
-                                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-                                format: self.filter.get_format(path),
-                            };
-
-                            if let Some(sender) = events {
-                                sender.send(Event::Scan(ScanEvent::PhotoFound {
-                                    path: photo.path.clone(),
-                                }));
-                            }
-
-                            photos.push(photo);
-                        }
-                        Err(e) => {
-                            let error = ScanError::ReadDirectory {
-                                path: path.to_path_buf(),
-                                source: e,
-                            };
-
-                            if let Some(sender) = events {
-                                sender.send(Event::Scan(ScanEvent::Error {
-                                    path: path.to_path_buf(),
-                                    message: error.to_string(),
-                                }));
-                            }
-
-                            errors.push(error);
-                        }
-                    }
+                    self.process_file(&entry, &mut ctx);
                 }
                 Err(e) => {
-                    let path = e.path().map(|p| p.to_path_buf()).unwrap_or_default();
-
-                    // Determine error type
-                    let error = if e.io_error().map(|e| e.kind())
-                        == Some(std::io::ErrorKind::PermissionDenied)
-                    {
-                        ScanError::PermissionDenied { path: path.clone() }
-                    } else {
-                        ScanError::ReadDirectory {
-                            path: path.clone(),
-                            source: std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                e.to_string(),
-                            ),
-                        }
-                    };
-
-                    if let Some(sender) = events {
-                        sender.send(Event::Scan(ScanEvent::Error {
-                            path,
-                            message: error.to_string(),
-                        }));
-                    }
-
-                    errors.push(error);
+                    self.handle_walk_error(e, &mut ctx);
                 }
             }
         }
 
-        Ok((photos, errors))
+        Ok((ctx.photos, ctx.errors))
     }
 }
 

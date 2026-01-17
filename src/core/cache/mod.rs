@@ -16,7 +16,7 @@ mod sqlite;
 mod traits;
 
 pub use memory::InMemoryCache;
-pub use sqlite::SqliteCache;
+pub use sqlite::{ScanState, SqliteCache};
 pub use traits::CacheBackend;
 
 use crate::core::hasher::HashAlgorithmKind;

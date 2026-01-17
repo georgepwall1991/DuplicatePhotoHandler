@@ -16,12 +16,15 @@
 //! | 11+      | Different     |
 
 mod grouper;
+pub mod lsh;
 mod traits;
 
 pub use grouper::TransitiveGrouper;
+pub use lsh::{LshConfig, LshIndex, LshIndexStats};
 pub use traits::{ComparisonStrategy, ThresholdStrategy};
 
 use crate::core::hasher::{ImageHashValue, PerceptualHash};
+use crate::events::{CompareEvent, CompareProgress, Event, EventSender};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -151,6 +154,173 @@ pub fn find_duplicate_pairs(
     matches
 }
 
+/// Find all duplicate pairs with progress events
+///
+/// Emits progress events every ~1000 comparisons to update the UI.
+pub fn find_duplicate_pairs_with_events(
+    photos: &[(PathBuf, ImageHashValue)],
+    strategy: &dyn ComparisonStrategy,
+    events: &EventSender,
+) -> Vec<MatchResult> {
+    let n = photos.len();
+    let total_comparisons = n.saturating_sub(1) * n / 2;
+
+    // Emit started event
+    events.send(Event::Compare(CompareEvent::Started { total_photos: n }));
+
+    let mut matches = Vec::new();
+    let mut comparisons_completed = 0;
+    let mut last_progress_update = 0;
+
+    // Progress update interval (every 1000 comparisons or 2% of total, whichever is smaller)
+    let update_interval = std::cmp::min(1000, std::cmp::max(1, total_comparisons / 50));
+
+    // Compare all pairs
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let (path_a, hash_a) = &photos[i];
+            let (path_b, hash_b) = &photos[j];
+
+            let distance = hash_a.distance(hash_b);
+
+            if strategy.is_duplicate(distance) {
+                let similarity = hash_a.similarity(hash_b);
+                let match_type = strategy.classify(distance);
+
+                matches.push(MatchResult {
+                    photo_a: path_a.clone(),
+                    photo_b: path_b.clone(),
+                    distance,
+                    similarity_percent: similarity,
+                    match_type,
+                });
+            }
+
+            comparisons_completed += 1;
+
+            // Emit progress update at intervals
+            if comparisons_completed - last_progress_update >= update_interval {
+                events.send(Event::Compare(CompareEvent::Progress(CompareProgress {
+                    comparisons_completed,
+                    total_comparisons,
+                    groups_found: 0, // Groups are calculated after all comparisons
+                })));
+                last_progress_update = comparisons_completed;
+            }
+        }
+    }
+
+    // Emit completed event
+    events.send(Event::Compare(CompareEvent::Completed {
+        total_groups: 0, // Will be updated by grouper
+        total_duplicates: matches.len(),
+    }));
+
+    matches
+}
+
+/// Find duplicate pairs using LSH for O(n log n) candidate filtering
+///
+/// This is much faster for large collections (1000+ photos) as it only
+/// compares candidate pairs identified by LSH rather than all pairs.
+pub fn find_duplicate_pairs_with_lsh(
+    photos: Vec<(PathBuf, ImageHashValue)>,
+    strategy: &dyn ComparisonStrategy,
+    lsh_config: LshConfig,
+) -> Vec<MatchResult> {
+    // Build LSH index
+    let index = LshIndex::build(lsh_config, photos);
+
+    // Get candidate pairs
+    let candidates = index.find_candidate_pairs();
+
+    let mut matches = Vec::new();
+
+    for (path_a, hash_a, path_b, hash_b) in candidates {
+        let distance = hash_a.distance(hash_b);
+
+        if strategy.is_duplicate(distance) {
+            let similarity = hash_a.similarity(hash_b);
+            let match_type = strategy.classify(distance);
+
+            matches.push(MatchResult {
+                photo_a: path_a.clone(),
+                photo_b: path_b.clone(),
+                distance,
+                similarity_percent: similarity,
+                match_type,
+            });
+        }
+    }
+
+    matches
+}
+
+/// Find duplicate pairs using LSH with progress events
+///
+/// Emits progress events during LSH indexing and candidate comparison.
+pub fn find_duplicate_pairs_with_lsh_events(
+    photos: Vec<(PathBuf, ImageHashValue)>,
+    strategy: &dyn ComparisonStrategy,
+    lsh_config: LshConfig,
+    events: &EventSender,
+) -> Vec<MatchResult> {
+    let n = photos.len();
+
+    // Emit started event
+    events.send(Event::Compare(CompareEvent::Started { total_photos: n }));
+
+    // Build LSH index
+    let index = LshIndex::build(lsh_config, photos);
+    let _stats = index.stats(); // Available for debugging if needed
+
+    // Get candidate pairs
+    let candidates = index.find_candidate_pairs();
+    let total_comparisons = candidates.len();
+
+    let mut matches = Vec::new();
+    let mut comparisons_completed = 0;
+    let mut last_progress_update = 0;
+
+    let update_interval = std::cmp::min(1000, std::cmp::max(1, total_comparisons / 50));
+
+    for (path_a, hash_a, path_b, hash_b) in candidates {
+        let distance = hash_a.distance(hash_b);
+
+        if strategy.is_duplicate(distance) {
+            let similarity = hash_a.similarity(hash_b);
+            let match_type = strategy.classify(distance);
+
+            matches.push(MatchResult {
+                photo_a: path_a.clone(),
+                photo_b: path_b.clone(),
+                distance,
+                similarity_percent: similarity,
+                match_type,
+            });
+        }
+
+        comparisons_completed += 1;
+
+        if comparisons_completed - last_progress_update >= update_interval {
+            events.send(Event::Compare(CompareEvent::Progress(CompareProgress {
+                comparisons_completed,
+                total_comparisons,
+                groups_found: 0,
+            })));
+            last_progress_update = comparisons_completed;
+        }
+    }
+
+    // Emit completed event
+    events.send(Event::Compare(CompareEvent::Completed {
+        total_groups: 0,
+        total_duplicates: matches.len(),
+    }));
+
+    matches
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -214,5 +384,48 @@ mod tests {
         assert_eq!(pairs.len(), 1);
         assert_eq!(pairs[0].distance, 0);
         assert_eq!(pairs[0].match_type, MatchType::Exact);
+    }
+
+    #[test]
+    fn find_duplicate_pairs_with_events_emits_progress() {
+        use crate::events::EventChannel;
+
+        let (sender, receiver) = EventChannel::new();
+        let strategy = ThresholdStrategy::new(10);
+
+        // Create enough photos to trigger progress events
+        let photos: Vec<_> = (0..50)
+            .map(|i| {
+                (
+                    PathBuf::from(format!("/{}.jpg", i)),
+                    ImageHashValue::new(vec![i as u8], HashAlgorithmKind::Difference),
+                )
+            })
+            .collect();
+
+        let _ = find_duplicate_pairs_with_events(&photos, &strategy, &sender);
+
+        // Drop sender so receiver can iterate
+        drop(sender);
+
+        // Collect all events
+        let events: Vec<_> = receiver.iter().collect();
+
+        // Should have at least Started and Completed events
+        assert!(events.len() >= 2);
+
+        // First event should be Started
+        match &events[0] {
+            Event::Compare(CompareEvent::Started { total_photos }) => {
+                assert_eq!(*total_photos, 50);
+            }
+            _ => panic!("Expected Started event"),
+        }
+
+        // Last event should be Completed
+        match events.last().unwrap() {
+            Event::Compare(CompareEvent::Completed { .. }) => {}
+            _ => panic!("Expected Completed event"),
+        }
     }
 }
