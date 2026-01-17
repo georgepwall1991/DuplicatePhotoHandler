@@ -39,7 +39,7 @@ const formatBytes = (bytes: number): string => {
 
 // Type guard to check if an item id is a valid ActiveModule
 const isActiveModule = (id: string): id is ActiveModule => {
-  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize' || id === 'unorganized'
+  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize' || id === 'unorganized' || id === 'similar' || id === 'history'
 }
 
 export function Sidebar({
@@ -63,8 +63,8 @@ export function Sidebar({
       label: 'Library',
       items: [
         { id: 'duplicates', name: 'Duplicates', hint: 'Exact matches', icon: Layers, available: true },
-        { id: 'similar', name: 'Similar Photos', hint: 'Near matches', icon: Images, available: false },
-        { id: 'history', name: 'Scan History', hint: 'Recent sessions', icon: History, available: false }
+        { id: 'similar', name: 'Similar Photos', hint: 'Near matches', icon: Images, available: true },
+        { id: 'history', name: 'Scan History', hint: 'Recent sessions', icon: History, available: true }
       ]
     },
     {

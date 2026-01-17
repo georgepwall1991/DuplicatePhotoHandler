@@ -32,6 +32,11 @@ pub fn run() {
             commands::create_organize_plan,
             commands::execute_organize_plan,
             commands::scan_unorganized,
+            commands::scan_similar,
+            commands::get_scan_history,
+            commands::get_scan_details,
+            commands::delete_scan_history,
+            commands::clear_scan_history,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

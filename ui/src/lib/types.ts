@@ -104,7 +104,67 @@ export interface LargeFileScanResult {
 }
 
 // Module routing
-export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized'
+export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized' | 'similar' | 'history'
+
+// Similar Photos types
+export interface SimilarConfig {
+  source_paths: string[]
+  min_distance: number
+  max_distance: number
+  algorithm: string | null
+}
+
+export interface SimilarPhoto {
+  path: string
+  distance: number
+  similarity_percent: number
+  match_type: string
+  size_bytes: number
+}
+
+export interface SimilarGroup {
+  id: string
+  reference: string
+  reference_size_bytes: number
+  similar_photos: SimilarPhoto[]
+  average_similarity: number
+  total_size_bytes: number
+}
+
+export interface SimilarResult {
+  groups: SimilarGroup[]
+  total_photos_scanned: number
+  similar_groups_found: number
+  similar_photos_found: number
+  duration_ms: number
+}
+
+export interface SimilarProgress {
+  phase: string
+  current: number
+  total: number
+}
+
+// Scan History types
+export type HistoryModuleType = 'duplicates' | 'screenshots' | 'similar' | 'large_files' | 'unorganized'
+
+export interface ScanHistoryEntry {
+  id: string
+  module_type: HistoryModuleType
+  scan_time: number  // Unix timestamp
+  paths: string[]
+  total_files: number
+  groups_found: number | null
+  duplicates_found: number | null
+  potential_savings: number | null
+  duration_ms: number
+  status: 'completed' | 'cancelled' | 'error'
+}
+
+export interface ScanHistoryResult {
+  entries: ScanHistoryEntry[]
+  total_count: number
+}
 
 // Organization types
 export type FolderStructure = 'year_month' | 'year_month_day' | 'year_month_flat'
