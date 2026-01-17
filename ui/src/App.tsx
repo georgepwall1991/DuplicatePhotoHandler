@@ -37,6 +37,7 @@ function AppContent() {
   const [scannedPaths, setScannedPaths] = useState<string[]>([])
   const [showSettings, setShowSettings] = useState(false)
   const [activeModule, setActiveModule] = useState<ActiveModule>('duplicates')
+  const [organizePaths, setOrganizePaths] = useState<string[]>([])
   const { showToast } = useToast()
   const watcherUnlistenRef = useRef<(() => void) | null>(null)
 
@@ -396,11 +397,10 @@ function AppContent() {
                     results={unorganizedResults}
                     onNewScan={handleNewScan}
                     onOrganize={(paths) => {
-                      // Navigate to organize module
+                      // Store paths and navigate to organize module
+                      setOrganizePaths(paths)
                       setActiveModule('organize')
-                      // The OrganizeView will need to pick up these paths
-                      // For now, just show a toast with guidance
-                      showToast(`Select ${paths.length} folder(s) in Organize to sort these files`, 'info')
+                      showToast(`${paths.length} folder(s) pre-selected for organization`, 'success')
                     }}
                   />
                 </motion.div>
@@ -418,7 +418,7 @@ function AppContent() {
               transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
               className="flex-1 glass-strong overflow-hidden shadow-2xl"
             >
-              <OrganizeView />
+              <OrganizeView initialPaths={organizePaths} />
             </motion.div>
           )}
         </AnimatePresence>
