@@ -3,7 +3,9 @@
 use duplicate_photo_cleaner::core::comparator::DuplicateGroup;
 use duplicate_photo_cleaner::core::hasher::HashAlgorithmKind;
 use duplicate_photo_cleaner::core::pipeline::{Pipeline, PipelineResult};
-use duplicate_photo_cleaner::events::{Event, EventSender, PipelineEvent};
+use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
+use duplicate_photo_cleaner::core::watcher::{FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent};
+use duplicate_photo_cleaner::events::{Event, EventSender, PipelineEvent, WatcherEvent};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,6 +20,8 @@ pub struct AppState {
     pub scanning: Mutex<bool>,
     /// Cancellation flag for current scan
     pub cancelled: Arc<AtomicBool>,
+    /// Folder watcher for background monitoring
+    pub watcher: Mutex<Option<FolderWatcher>>,
 }
 
 impl Default for AppState {
@@ -26,6 +30,7 @@ impl Default for AppState {
             results: Mutex::new(None),
             scanning: Mutex::new(false),
             cancelled: Arc::new(AtomicBool::new(false)),
+            watcher: Mutex::new(None),
         }
     }
 }
@@ -386,4 +391,149 @@ pub async fn restore_from_trash(filenames: Vec<String>) -> Result<RestoreResult,
     }
 
     Ok(RestoreResult { restored, errors })
+}
+
+/// Start watching folders for changes
+#[tauri::command]
+pub fn start_watching(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<bool, String> {
+    let mut watcher_guard = state.watcher.lock().map_err(|e| e.to_string())?;
+
+    // If already watching, stop first
+    if watcher_guard.is_some() {
+        *watcher_guard = None;
+    }
+
+    let app_handle = app.clone();
+
+    // Create watcher with event handler
+    let mut watcher = FolderWatcher::new(WatcherConfig::default(), move |event| {
+        let tauri_event = match event {
+            CoreWatcherEvent::PhotoAdded(path) => {
+                Event::Watcher(WatcherEvent::PhotoAdded { path })
+            }
+            CoreWatcherEvent::PhotoModified(path) => {
+                Event::Watcher(WatcherEvent::PhotoModified { path })
+            }
+            CoreWatcherEvent::PhotoRemoved(path) => {
+                Event::Watcher(WatcherEvent::PhotoRemoved { path })
+            }
+            CoreWatcherEvent::Error(msg) => {
+                Event::Watcher(WatcherEvent::Error { message: msg })
+            }
+        };
+        let _ = app_handle.emit("watcher-event", &tauri_event);
+    })
+    .map_err(|e| e.to_string())?;
+
+    // Watch all requested paths
+    for path_str in &paths {
+        let path = PathBuf::from(path_str);
+        if path.exists() {
+            watcher.watch(&path).map_err(|e| e.to_string())?;
+            let _ = app.emit(
+                "watcher-event",
+                &Event::Watcher(WatcherEvent::Started { path }),
+            );
+        }
+    }
+
+    *watcher_guard = Some(watcher);
+
+    Ok(true)
+}
+
+/// Stop watching folders
+#[tauri::command]
+pub fn stop_watching(state: State<'_, AppState>) -> Result<bool, String> {
+    let mut watcher_guard = state.watcher.lock().map_err(|e| e.to_string())?;
+
+    if watcher_guard.is_some() {
+        *watcher_guard = None;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Check if watching is active
+#[tauri::command]
+pub fn is_watching(state: State<'_, AppState>) -> Result<bool, String> {
+    let watcher_guard = state.watcher.lock().map_err(|e| e.to_string())?;
+    Ok(watcher_guard.is_some())
+}
+
+/// Get currently watched paths
+#[tauri::command]
+pub fn get_watched_paths(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let watcher_guard = state.watcher.lock().map_err(|e| e.to_string())?;
+
+    match &*watcher_guard {
+        Some(watcher) => Ok(watcher
+            .watched_paths()
+            .into_iter()
+            .map(|p| p.display().to_string())
+            .collect()),
+        None => Ok(vec![]),
+    }
+}
+
+/// Export result for frontend
+#[derive(Debug, Serialize)]
+pub struct ExportResultDto {
+    pub success: bool,
+    pub path: String,
+    pub format: String,
+    pub groups_exported: usize,
+}
+
+/// Export scan results to CSV
+#[tauri::command]
+pub fn export_results_csv(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<ExportResultDto, String> {
+    let results = state.results.lock().map_err(|e| e.to_string())?;
+
+    let result = results.as_ref().ok_or("No scan results available")?;
+
+    let file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    let writer = std::io::BufWriter::new(file);
+
+    export_csv(&result.groups, writer).map_err(|e| e.to_string())?;
+
+    Ok(ExportResultDto {
+        success: true,
+        path,
+        format: "CSV".to_string(),
+        groups_exported: result.groups.len(),
+    })
+}
+
+/// Export scan results to HTML
+#[tauri::command]
+pub fn export_results_html(
+    state: State<'_, AppState>,
+    path: String,
+    title: Option<String>,
+) -> Result<ExportResultDto, String> {
+    let results = state.results.lock().map_err(|e| e.to_string())?;
+
+    let result = results.as_ref().ok_or("No scan results available")?;
+
+    let file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    let writer = std::io::BufWriter::new(file);
+
+    let report_title = title.unwrap_or_else(|| "Duplicate Photo Report".to_string());
+    export_html(&result.groups, writer, &report_title).map_err(|e| e.to_string())?;
+
+    Ok(ExportResultDto {
+        success: true,
+        path,
+        format: "HTML".to_string(),
+        groups_exported: result.groups.len(),
+    })
 }

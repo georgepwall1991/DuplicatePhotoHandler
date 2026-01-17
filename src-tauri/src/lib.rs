@@ -18,6 +18,12 @@ pub fn run() {
             commands::get_file_info,
             commands::get_quality_score,
             commands::restore_from_trash,
+            commands::start_watching,
+            commands::stop_watching,
+            commands::is_watching,
+            commands::get_watched_paths,
+            commands::export_results_csv,
+            commands::export_results_html,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

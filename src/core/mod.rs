@@ -11,6 +11,7 @@
 //! - `pipeline` - Orchestrates the full workflow
 //! - `metadata` - Extracts EXIF metadata from photos
 //! - `quality` - Analyzes image quality (sharpness, contrast)
+//! - `watcher` - Monitors folders for file changes
 
 pub mod cache;
 pub mod comparator;
@@ -20,6 +21,7 @@ pub mod pipeline;
 pub mod quality;
 pub mod reporter;
 pub mod scanner;
+pub mod watcher;
 
 // Re-export commonly used types
 pub use comparator::{DuplicateGroup, MatchResult, MatchType};

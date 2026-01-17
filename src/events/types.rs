@@ -14,6 +14,25 @@ pub enum Event {
     Compare(CompareEvent),
     /// Pipeline-level events
     Pipeline(PipelineEvent),
+    /// File watcher events
+    Watcher(WatcherEvent),
+}
+
+/// Events from the folder watcher
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WatcherEvent {
+    /// Watcher started monitoring a folder
+    Started { path: PathBuf },
+    /// Watcher stopped monitoring a folder
+    Stopped { path: PathBuf },
+    /// A new photo was detected
+    PhotoAdded { path: PathBuf },
+    /// A photo was modified
+    PhotoModified { path: PathBuf },
+    /// A photo was removed
+    PhotoRemoved { path: PathBuf },
+    /// An error occurred
+    Error { message: String },
 }
 
 /// Events during the scanning phase
