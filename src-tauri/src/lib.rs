@@ -29,6 +29,8 @@ pub fn run() {
             commands::scan_screenshots,
             commands::scan_large_files,
             commands::show_in_folder,
+            commands::create_organize_plan,
+            commands::execute_organize_plan,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
