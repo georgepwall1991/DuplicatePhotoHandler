@@ -137,6 +137,35 @@ fn detect_from_dimensions(width: u32, height: u32) -> Option<ScreenshotDetection
     None
 }
 
+/// Quick pre-filter to check if a file might be a screenshot.
+///
+/// This is a fast check that avoids expensive metadata extraction.
+/// Returns true if:
+/// - Filename matches any screenshot pattern, OR
+/// - File is a PNG (screenshots are commonly PNGs)
+///
+/// Used for performance optimization in large photo libraries.
+pub fn might_be_screenshot(path: &Path) -> bool {
+    // Check filename patterns first (fast)
+    if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+        let lower_filename = filename.to_lowercase();
+        for pattern in SCREENSHOT_PATTERNS {
+            if lower_filename.contains(pattern) {
+                return true;
+            }
+        }
+    }
+
+    // PNG files might be screenshots (many screenshots are PNG)
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        if ext.eq_ignore_ascii_case("png") {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Determine if a file is a screenshot
 ///
 /// Uses a three-level approach:

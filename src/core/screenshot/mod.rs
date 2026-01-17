@@ -5,5 +5,5 @@
 mod detector;
 
 pub use detector::{
-    is_screenshot, ScreenshotConfidence, ScreenshotDetection, ScreenshotInfo,
+    is_screenshot, might_be_screenshot, ScreenshotConfidence, ScreenshotDetection, ScreenshotInfo,
 };

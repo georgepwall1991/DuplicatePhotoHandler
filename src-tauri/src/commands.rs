@@ -685,6 +685,13 @@ pub async fn scan_screenshots(
         *scanning = true;
     }
 
+    // Helper to reset scanning state on any exit path
+    let reset_scanning = || {
+        if let Ok(mut scanning) = state.scanning.lock() {
+            *scanning = false;
+        }
+    };
+
     // Reset cancellation flag
     state.cancelled.store(false, Ordering::SeqCst);
     let cancelled = state.cancelled.clone();
@@ -704,7 +711,13 @@ pub async fn scan_screenshots(
 
     // Scan for all photos first
     let scanner = WalkDirScanner::new(duplicate_photo_cleaner::core::scanner::ScanConfig::default());
-    let scan_result = scanner.scan(&paths).map_err(|e| e.to_string())?;
+    let scan_result = match scanner.scan(&paths) {
+        Ok(result) => result,
+        Err(e) => {
+            reset_scanning();
+            return Err(e.to_string());
+        }
+    };
 
     let app_handle = app.clone();
     let (sender, receiver) = crossbeam_channel::unbounded::<Event>();
@@ -725,6 +738,9 @@ pub async fn scan_screenshots(
     let event_sender = EventSender::new(sender);
 
     // Filter photos to find screenshots
+    // Optimization: check filename pattern first before expensive metadata extraction
+    use duplicate_photo_cleaner::core::screenshot::might_be_screenshot;
+
     let mut screenshots = Vec::new();
     let mut screenshot_paths = Vec::new();
     let mut total_size_bytes: u64 = 0;
@@ -732,6 +748,12 @@ pub async fn scan_screenshots(
     for photo in &scan_result.photos {
         if cancelled.load(Ordering::SeqCst) {
             break;
+        }
+
+        // Quick filename check - skip metadata extraction for files that clearly aren't screenshots
+        // This significantly improves performance for large photo libraries
+        if !might_be_screenshot(&photo.path) {
+            continue;
         }
 
         let metadata = extract_metadata(&photo.path);
