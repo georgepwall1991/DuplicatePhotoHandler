@@ -243,7 +243,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     }
   }
 
-  const handleUndo = async () => {
+  const handleUndo = useCallback(async () => {
     if (lastTrashedFiles.length === 0) return
 
     setIsRestoring(true)
@@ -264,7 +264,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     } finally {
       setIsRestoring(false)
     }
-  }
+  }, [lastTrashedFiles, showToast])
 
   const selectedSize = Array.from(selectedFiles).reduce((acc, path) => {
     for (const group of results.groups) {

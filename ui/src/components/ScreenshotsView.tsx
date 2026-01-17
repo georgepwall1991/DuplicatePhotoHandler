@@ -30,16 +30,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
   const { showToast } = useToast()
   const containerRef = useRef<HTMLDivElement>(null)
 
-  if (!results) {
-    return (
-      <EmptyState
-        icon="📸"
-        title="No Screenshot Data"
-        message="Run a scan to find screenshots"
-      />
-    )
-  }
-
+  // All hooks must be declared before any early returns
   const togglePath = useCallback((path: string) => {
     setSelectedPaths(prev => {
       const newSelected = new Set(prev)
@@ -53,6 +44,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
   }, [])
 
   const selectAllVisible = useCallback(() => {
+    if (!results) return
     const newSelected = new Set(selectedPaths)
 
     if (activeTab === 'all') {
@@ -133,11 +125,6 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     }
   }, [lastTrashedFiles, showToast])
 
-  const selectedSize = Array.from(selectedPaths).reduce((acc, path) => {
-    const screenshot = results.all_screenshots.find(s => s.path === path)
-    return acc + (screenshot?.size_bytes || 0)
-  }, 0)
-
   const toggleGroupExpanded = useCallback((groupId: string) => {
     setExpandedGroups(prev => {
       const next = new Set(prev)
@@ -153,6 +140,22 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
   const handlePreviewScreenshot = useCallback((screenshot: ScreenshotInfo) => {
     setPreviewImage(screenshot.path)
   }, [])
+
+  // Early return after all hooks are declared
+  if (!results) {
+    return (
+      <EmptyState
+        icon="📸"
+        title="No Screenshot Data"
+        message="Run a scan to find screenshots"
+      />
+    )
+  }
+
+  const selectedSize = Array.from(selectedPaths).reduce((acc, path) => {
+    const screenshot = results.all_screenshots.find(s => s.path === path)
+    return acc + (screenshot?.size_bytes || 0)
+  }, 0)
 
   const renderAllTab = () => {
     if (results.all_screenshots.length === 0) {

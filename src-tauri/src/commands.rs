@@ -787,7 +787,7 @@ pub async fn scan_screenshots(
     }
 
     // Run duplicate detection on screenshots only if we found any
-    let (duplicate_groups, duplicate_count, potential_savings) = if !screenshot_paths.is_empty() && !cancelled.load(Ordering::SeqCst) {
+    let (duplicate_groups, _duplicate_count, _potential_savings) = if !screenshot_paths.is_empty() && !cancelled.load(Ordering::SeqCst) {
         let pipeline = Pipeline::builder()
             .paths(screenshot_paths.clone())
             .algorithm(algorithm)

@@ -12,6 +12,13 @@ interface ScanProgress {
   message: string
 }
 
+// Event payload types from the Rust backend
+interface ScanEventPayload {
+  Scan?: { Progress: { photos_found: number } }
+  Hash?: { Progress: { completed: number; total: number } }
+  Compare?: { Progress: boolean; DuplicateFound?: boolean }
+}
+
 interface UseScanEventsProps {
   onProgress: (progress: ScanProgress) => void
 }
@@ -22,7 +29,7 @@ export function useScanEvents({ onProgress }: UseScanEventsProps) {
   const maxCompletedRef = useRef(0)
 
   useEffect(() => {
-    const unlisten = listen('scan-event', (event) => {
+    const unlisten = listen<ScanEventPayload>('scan-event', (event) => {
       const data = event.payload
 
       if (data.Scan?.Progress) {

@@ -12,6 +12,14 @@ interface ScanProgress {
   message: string
 }
 
+// Event payload types from the Rust backend
+interface ScreenshotScanEventPayload {
+  Scan?: { Progress: { photos_found: number } }
+  Hash?: { Progress: { completed: number; total: number } }
+  Compare?: { Progress: boolean; DuplicateFound?: boolean }
+  Pipeline?: { Completed?: boolean; Cancelled?: boolean }
+}
+
 interface UseScreenshotScanEventsProps {
   onProgress: (progress: ScanProgress) => void
 }
@@ -21,7 +29,7 @@ export function useScreenshotScanEvents({ onProgress }: UseScreenshotScanEventsP
   const maxCompletedRef = useRef(0)
 
   useEffect(() => {
-    const unlisten = listen('screenshot-scan-event', (event) => {
+    const unlisten = listen<ScreenshotScanEventPayload>('screenshot-scan-event', (event) => {
       const data = event.payload
 
       // Handle scan progress (discovering photos)

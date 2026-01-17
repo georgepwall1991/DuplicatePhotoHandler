@@ -1,11 +1,16 @@
 import { invoke as tauriInvoke, convertFileSrc as tauriConvertFileSrc } from '@tauri-apps/api/core';
-import { listen as tauriListen } from '@tauri-apps/api/event';
-import { open as tauriOpen } from '@tauri-apps/plugin-dialog';
+import { listen as tauriListen, type Event } from '@tauri-apps/api/event';
+import { open as tauriOpen, type OpenDialogOptions } from '@tauri-apps/plugin-dialog';
+
+// Type for Tauri internals check
+interface WindowWithTauri extends Window {
+  __TAURI_INTERNALS__?: unknown;
+}
 
 // Tauri v2 uses __TAURI_INTERNALS__ instead of v1's __TAURI_IPC__
-export const isTauri = () => !!(window as any).__TAURI_INTERNALS__;
+export const isTauri = () => !!(window as WindowWithTauri).__TAURI_INTERNALS__;
 
-export async function invoke<T>(command: string, args?: any): Promise<T> {
+export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   if (isTauri()) {
     return tauriInvoke(command, args);
   }
@@ -65,7 +70,8 @@ export async function invoke<T>(command: string, args?: any): Promise<T> {
   if (command === 'trash_files') {
     return new Promise((resolve) => {
       setTimeout(() => {
-        resolve((args?.paths?.length || 0) as T);
+        const paths = args?.paths as string[] | undefined;
+        resolve((paths?.length || 0) as T);
       }, 1000);
     });
   }
@@ -73,7 +79,7 @@ export async function invoke<T>(command: string, args?: any): Promise<T> {
   throw new Error(`Mock command not implemented: ${command}`);
 }
 
-export async function listen(event: string, handler: (event: any) => void): Promise<() => void> {
+export async function listen<T>(event: string, handler: (event: Event<T>) => void): Promise<() => void> {
   if (isTauri()) {
     return tauriListen(event, handler);
   }
@@ -82,12 +88,13 @@ export async function listen(event: string, handler: (event: any) => void): Prom
 
   // Simulate events for browser testing
   if (event === 'scan-event') {
+    const mockEvent = (payload: T) => ({ event, id: 0, payload } as Event<T>);
     setTimeout(() => {
-      handler({ payload: { Scan: { Progress: { photos_found: 100 } } } });
+      handler(mockEvent({ Scan: { Progress: { photos_found: 100 } } } as T));
       setTimeout(() => {
-        handler({ payload: { Hash: { Progress: { completed: 50, total: 100 } } } });
+        handler(mockEvent({ Hash: { Progress: { completed: 50, total: 100 } } } as T));
         setTimeout(() => {
-          handler({ payload: { Compare: { Progress: true } } });
+          handler(mockEvent({ Compare: { Progress: true } } as T));
         }, 500);
       }, 500);
     }, 500);
@@ -96,7 +103,7 @@ export async function listen(event: string, handler: (event: any) => void): Prom
   return () => console.log(`[Mock] Unlistening from event: ${event}`);
 }
 
-export async function open(options: any): Promise<string | string[] | null> {
+export async function open(options: OpenDialogOptions): Promise<string | string[] | null> {
   if (isTauri()) {
     return tauriOpen(options);
   }

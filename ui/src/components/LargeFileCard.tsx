@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { File, Film, Image, Check, Eye, FolderOpen } from 'lucide-react'
 import { convertFileSrc, invoke } from '../lib/tauri'
@@ -40,12 +40,6 @@ function ImageThumbnail({
 }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
-
-  useEffect(() => {
-    setLoaded(false)
-    setError(false)
-  }, [src])
-
   const assetUrl = convertFileSrc(src)
 
   if (error) {
@@ -135,7 +129,7 @@ export function LargeFileCard({ file, isSelected, onToggleSelect, onPreview }: L
       {/* Thumbnail area */}
       <div className="relative aspect-square overflow-hidden">
         {isImage ? (
-          <ImageThumbnail src={file.path} alt={file.filename} className="w-full h-full" />
+          <ImageThumbnail key={file.path} src={file.path} alt={file.filename} className="w-full h-full" />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/5 to-white/[0.02]">
             {isVideo ? (

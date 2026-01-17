@@ -32,10 +32,6 @@ function ImagePanel({
 }) {
   const [imageLoaded, setImageLoaded] = useState(false)
 
-  useEffect(() => {
-    setImageLoaded(false)
-  }, [info?.path])
-
   if (isLoading || !info) {
     return (
       <div className="flex-1 flex flex-col glass-card overflow-hidden">
@@ -173,12 +169,14 @@ export function ComparisonView({
         {/* Comparison panels */}
         <div className="flex gap-4 flex-1">
           <ImagePanel
+            key={leftInfo?.path ?? 'left'}
             info={leftInfo}
             label="Photo A"
             isLoading={loading}
             isSelected={leftIsBetter && !rightIsBetter}
           />
           <ImagePanel
+            key={rightInfo?.path ?? 'right'}
             info={rightInfo}
             label="Photo B"
             isLoading={loading}

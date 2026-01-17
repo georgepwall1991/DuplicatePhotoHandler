@@ -8,14 +8,10 @@ interface ImagePreviewProps {
   isSelected?: boolean
 }
 
-export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePreviewProps) {
+// Inner component that resets state when key (src) changes
+function ImagePreviewContent({ src, onClose, onDelete, isSelected }: ImagePreviewProps & { src: string }) {
   const [loaded, setLoaded] = useState(false)
   const [imageInfo, setImageInfo] = useState<{ width: number; height: number } | null>(null)
-
-  useEffect(() => {
-    setLoaded(false)
-    setImageInfo(null)
-  }, [src])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -111,4 +107,11 @@ export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePrevie
       </div>
     </div>
   )
+}
+
+// Wrapper component that uses key to reset state when src changes
+export function ImagePreview({ src, onClose, onDelete, isSelected }: ImagePreviewProps) {
+  if (!src) return null
+  // Key prop forces remount when src changes, resetting all internal state
+  return <ImagePreviewContent key={src} src={src} onClose={onClose} onDelete={onDelete} isSelected={isSelected} />
 }
