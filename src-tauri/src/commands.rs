@@ -2,7 +2,7 @@
 
 use duplicate_photo_cleaner::core::comparator::DuplicateGroup;
 use duplicate_photo_cleaner::core::hasher::HashAlgorithmKind;
-use duplicate_photo_cleaner::core::pipeline::{Pipeline, PipelineResult};
+use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
 use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
 use duplicate_photo_cleaner::core::watcher::{FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent};
 use duplicate_photo_cleaner::events::{Event, EventSender, PipelineEvent, WatcherEvent};
@@ -137,18 +137,14 @@ pub async fn start_scan(
 
     let event_sender = EventSender::new(sender);
 
-    // Run scan - use a helper to ensure scanning state is always reset
+    // Run scan with cancellation support
+    let cancel_token: CancellationToken = cancelled.clone();
     let scan_result = async {
         let task_result = tokio::task::spawn_blocking(move || {
-            pipeline.run_with_events(&event_sender)
+            pipeline.run_with_cancellation(&event_sender, cancel_token)
         })
         .await
         .map_err(|e| e.to_string())?;
-
-        // Check if cancelled
-        if cancelled.load(Ordering::SeqCst) {
-            return Err("Scan was cancelled".to_string());
-        }
 
         task_result.map_err(|e| e.to_string())
     }
@@ -337,6 +333,25 @@ pub async fn get_quality_score(path: String) -> Result<QualityScoreDto, String> 
     })
 }
 
+/// Validate filename for safe use in AppleScript
+/// Only allows alphanumeric, spaces, dots, dashes, underscores, and common punctuation
+fn is_safe_filename(filename: &str) -> bool {
+    if filename.is_empty() || filename.len() > 255 {
+        return false;
+    }
+    filename.chars().all(|c| {
+        c.is_alphanumeric()
+            || c == ' '
+            || c == '.'
+            || c == '-'
+            || c == '_'
+            || c == '('
+            || c == ')'
+            || c == '['
+            || c == ']'
+    })
+}
+
 /// Restore files from trash (macOS only)
 /// Uses AppleScript to put files back to their original locations
 #[tauri::command]
@@ -347,7 +362,14 @@ pub async fn restore_from_trash(filenames: Vec<String>) -> Result<RestoreResult,
     #[cfg(target_os = "macos")]
     {
         for filename in filenames {
+            // Security: Validate filename to prevent AppleScript injection
+            if !is_safe_filename(&filename) {
+                errors.push(format!("{}: Invalid filename (contains unsafe characters)", filename));
+                continue;
+            }
+
             // AppleScript to restore a file from Trash
+            // Safe because filename is validated above
             let script = format!(
                 r#"
                 tell application "Finder"
@@ -361,7 +383,7 @@ pub async fn restore_from_trash(filenames: Vec<String>) -> Result<RestoreResult,
                     return "not found"
                 end tell
                 "#,
-                filename.replace("\"", "\\\"")
+                filename.replace("\"", "\\\"").replace("\\", "\\\\")
             );
 
             let output = std::process::Command::new("osascript")

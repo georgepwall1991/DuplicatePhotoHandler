@@ -12,9 +12,12 @@ use crate::events::{
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
+
+/// Cancellation token for stopping pipeline execution
+pub type CancellationToken = Arc<AtomicBool>;
 
 /// Result of the hashing phase
 struct HashingResult {
@@ -176,6 +179,15 @@ impl Pipeline {
         self.run_with_events(&null_sender())
     }
 
+    /// Run the pipeline with cancellation support
+    pub fn run_with_cancellation(
+        &self,
+        events: &EventSender,
+        cancel_token: CancellationToken,
+    ) -> Result<PipelineResult, DuplicateFinderError> {
+        self.run_internal(events, Some(cancel_token))
+    }
+
     /// Hash all photos in parallel, using cache when available.
     ///
     /// Uses chunked batch cache writes for better performance AND durability:
@@ -186,6 +198,7 @@ impl Pipeline {
         &self,
         photos: &[PhotoFile],
         events: &EventSender,
+        cancel_token: Option<&CancellationToken>,
     ) -> Result<HashingResult, DuplicateFinderError> {
         const CHUNK_SIZE: usize = 100;
 
@@ -202,6 +215,14 @@ impl Pipeline {
 
         // Process photos in chunks for incremental cache durability
         for chunk in photos.chunks(CHUNK_SIZE) {
+            // Check for cancellation before processing each chunk
+            if let Some(token) = cancel_token {
+                if token.load(Ordering::SeqCst) {
+                    events.send(Event::Pipeline(PipelineEvent::Cancelled));
+                    return Err(DuplicateFinderError::Cancelled);
+                }
+            }
+
             // Process chunk in parallel
             let results: Vec<SingleHashResult> = chunk
                 .par_iter()
@@ -333,6 +354,15 @@ impl Pipeline {
         &self,
         events: &EventSender,
     ) -> Result<PipelineResult, DuplicateFinderError> {
+        self.run_internal(events, None)
+    }
+
+    /// Internal implementation that supports optional cancellation
+    fn run_internal(
+        &self,
+        events: &EventSender,
+        cancel_token: Option<CancellationToken>,
+    ) -> Result<PipelineResult, DuplicateFinderError> {
         let start_time = Instant::now();
         let mut errors = Vec::new();
 
@@ -357,18 +387,34 @@ impl Pipeline {
             return Ok(self.empty_result(events, start_time, errors));
         }
 
+        // Check for cancellation after scanning
+        if let Some(ref token) = cancel_token {
+            if token.load(Ordering::SeqCst) {
+                events.send(Event::Pipeline(PipelineEvent::Cancelled));
+                return Err(DuplicateFinderError::Cancelled);
+            }
+        }
+
         // Phase 2: Hashing
         events.send(Event::Pipeline(PipelineEvent::PhaseChanged {
             phase: PipelinePhase::Hashing,
         }));
         events.send(Event::Hash(HashEvent::Started { total_photos }));
 
-        let hash_result = self.hash_photos(&photos, events)?;
+        let hash_result = self.hash_photos(&photos, events, cancel_token.as_ref())?;
 
         events.send(Event::Hash(HashEvent::Completed {
             total_hashed: hash_result.hashes.len(),
             cache_hits: hash_result.cache_hits,
         }));
+
+        // Check for cancellation after hashing
+        if let Some(ref token) = cancel_token {
+            if token.load(Ordering::SeqCst) {
+                events.send(Event::Pipeline(PipelineEvent::Cancelled));
+                return Err(DuplicateFinderError::Cancelled);
+            }
+        }
 
         // Phase 3: Comparing
         events.send(Event::Pipeline(PipelineEvent::PhaseChanged {

@@ -31,6 +31,9 @@ pub enum DuplicateFinderError {
 
     #[error("Configuration error: {0}")]
     Config(String),
+
+    #[error("Operation was cancelled")]
+    Cancelled,
 }
 
 /// Errors that occur during photo scanning

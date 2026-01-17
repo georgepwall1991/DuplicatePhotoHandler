@@ -13,4 +13,4 @@
 
 mod executor;
 
-pub use executor::{Pipeline, PipelineBuilder, PipelineResult};
+pub use executor::{CancellationToken, Pipeline, PipelineBuilder, PipelineResult};
