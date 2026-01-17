@@ -3,6 +3,7 @@
 use duplicate_photo_cleaner::core::cache::{CacheBackend, SqliteCache};
 use duplicate_photo_cleaner::core::comparator::DuplicateGroup;
 use duplicate_photo_cleaner::core::hasher::HashAlgorithmKind;
+use duplicate_photo_cleaner::core::large_files::{LargeFileScanner, LargeFileScanResult};
 use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
 use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
 use duplicate_photo_cleaner::core::watcher::{FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent};
@@ -827,4 +828,50 @@ pub async fn scan_screenshots(
         total_size_bytes,
         scan_duration_ms,
     })
+}
+
+/// Scan for large files
+#[tauri::command]
+pub async fn scan_large_files(
+    paths: Vec<String>,
+    min_size_mb: Option<u64>,
+    max_results: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<LargeFileScanResult, String> {
+    // Check if already scanning
+    {
+        let mut scanning = state.scanning.lock().map_err(|e| e.to_string())?;
+        if *scanning {
+            return Err("A scan is already in progress".to_string());
+        }
+        *scanning = true;
+    }
+
+    // Helper to reset scanning state on any exit path
+    let reset_scanning = || {
+        if let Ok(mut scanning) = state.scanning.lock() {
+            *scanning = false;
+        }
+    };
+
+    // Apply defaults if not provided
+    let min_size_mb = min_size_mb.unwrap_or(10);
+    let max_results = max_results.unwrap_or(50);
+
+    // Create scanner with optional overrides
+    let scanner = LargeFileScanner::new(min_size_mb, max_results);
+
+    // Run scan
+    let result = match scanner.scan(&paths) {
+        Ok(result) => result,
+        Err(e) => {
+            reset_scanning();
+            return Err(e);
+        }
+    };
+
+    // Reset scanning state
+    reset_scanning();
+
+    Ok(result)
 }
