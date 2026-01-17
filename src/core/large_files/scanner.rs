@@ -112,7 +112,11 @@ impl LargeFileScanner {
     where
         F: FnMut(u64, usize, &str),
     {
-        let start = std::time::Instant::now();
+        use std::time::{Duration, Instant};
+
+        let start = Instant::now();
+        let mut last_progress_time = Instant::now();
+        const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 
         let mut heap: BinaryHeap<Reverse<LargeFileInfo>> = BinaryHeap::new();
         let mut total_size_bytes = 0u64;
@@ -140,13 +144,16 @@ impl LargeFileScanner {
 
                 files_scanned += 1;
 
-                // Report progress every 100 files
-                if files_scanned % 100 == 0 {
+                // Report progress every 100 files OR every 100ms (whichever comes first)
+                // This prevents flooding the frontend while ensuring responsive updates
+                let now = Instant::now();
+                if files_scanned % 100 == 0 || now.duration_since(last_progress_time) >= PROGRESS_INTERVAL {
                     on_progress(
                         files_scanned,
                         heap.len(),
                         entry_path.to_str().unwrap_or(""),
                     );
+                    last_progress_time = now;
                 }
 
                 // Get file metadata (O(1) operation)

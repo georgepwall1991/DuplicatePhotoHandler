@@ -882,23 +882,32 @@ pub async fn scan_large_files(
         },
     );
 
-    // Run scan with progress callback
+    // Run scan with progress callback in a blocking task to avoid blocking the async runtime
     let app_handle = app.clone();
-    let result = match scanner.scan_with_progress(&paths, |files_scanned, large_found, current| {
-        let _ = app_handle.emit(
-            "large-file-scan-event",
-            LargeFileScanProgress {
-                files_scanned,
-                large_files_found: large_found,
-                current_file: current.to_string(),
-                phase: "Scanning".to_string(),
-            },
-        );
-    }) {
-        Ok(result) => result,
-        Err(e) => {
+    let paths_clone = paths.clone();
+    let result = match tokio::task::spawn_blocking(move || {
+        scanner.scan_with_progress(&paths_clone, |files_scanned, large_found, current| {
+            let _ = app_handle.emit(
+                "large-file-scan-event",
+                LargeFileScanProgress {
+                    files_scanned,
+                    large_files_found: large_found,
+                    current_file: current.to_string(),
+                    phase: "Scanning".to_string(),
+                },
+            );
+        })
+    })
+    .await
+    {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
             reset_scanning();
             return Err(e);
+        }
+        Err(e) => {
+            reset_scanning();
+            return Err(format!("Scan task panicked: {}", e));
         }
     };
 
