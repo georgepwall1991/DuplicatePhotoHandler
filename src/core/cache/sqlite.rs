@@ -94,6 +94,7 @@ impl SqliteCache {
             HashAlgorithmKind::Average => "average",
             HashAlgorithmKind::Difference => "difference",
             HashAlgorithmKind::Perceptual => "perceptual",
+            HashAlgorithmKind::Fusion => "fusion",
         }
     }
 
@@ -102,6 +103,7 @@ impl SqliteCache {
         match s {
             "average" => HashAlgorithmKind::Average,
             "perceptual" => HashAlgorithmKind::Perceptual,
+            "fusion" => HashAlgorithmKind::Fusion,
             _ => HashAlgorithmKind::Difference,
         }
     }

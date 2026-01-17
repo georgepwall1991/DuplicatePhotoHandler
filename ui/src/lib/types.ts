@@ -34,3 +34,11 @@ export interface FileInfo {
   modified: string | null
   dimensions: [number, number] | null
 }
+
+export interface QualityScore {
+  path: string
+  sharpness: number
+  contrast: number
+  brightness: number
+  overall: number
+}

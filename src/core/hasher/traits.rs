@@ -50,6 +50,8 @@ pub enum HashAlgorithmKind {
     Difference,
     /// Perceptual Hash (pHash) - Most robust, handles edits well
     Perceptual,
+    /// Multi-Algorithm Fusion - Combines aHash+dHash+pHash with voting
+    Fusion,
 }
 
 impl HashAlgorithmKind {
@@ -65,6 +67,9 @@ impl HashAlgorithmKind {
             HashAlgorithmKind::Perceptual => {
                 "Perceptual Hash (pHash) - DCT-based, robust to edits and transformations"
             }
+            HashAlgorithmKind::Fusion => {
+                "Multi-Algorithm Fusion - Combines aHash+dHash+pHash with voting for higher accuracy"
+            }
         }
     }
 }
@@ -75,6 +80,7 @@ impl std::fmt::Display for HashAlgorithmKind {
             HashAlgorithmKind::Average => write!(f, "aHash"),
             HashAlgorithmKind::Difference => write!(f, "dHash"),
             HashAlgorithmKind::Perceptual => write!(f, "pHash"),
+            HashAlgorithmKind::Fusion => write!(f, "fusion"),
         }
     }
 }

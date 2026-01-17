@@ -98,6 +98,7 @@ pub async fn start_scan(
     let algorithm = match config.algorithm.as_deref() {
         Some("average") => HashAlgorithmKind::Average,
         Some("perceptual") => HashAlgorithmKind::Perceptual,
+        Some("fusion") => HashAlgorithmKind::Fusion,
         _ => HashAlgorithmKind::Difference,
     };
 
@@ -294,6 +295,41 @@ pub async fn trash_files(paths: Vec<String>) -> Result<TrashResult, String> {
 pub struct RestoreResult {
     pub restored: usize,
     pub errors: Vec<String>,
+}
+
+/// Quality score for an image
+#[derive(Debug, Serialize)]
+pub struct QualityScoreDto {
+    pub path: String,
+    pub sharpness: f64,
+    pub contrast: f64,
+    pub brightness: f64,
+    pub overall: f64,
+}
+
+/// Get quality score for an image (sharpness, contrast, etc.)
+#[tauri::command]
+pub async fn get_quality_score(path: String) -> Result<QualityScoreDto, String> {
+    use duplicate_photo_cleaner::core::quality::QualityAnalyzer;
+
+    let path_buf = PathBuf::from(&path);
+
+    if !path_buf.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+
+    let analyzer = QualityAnalyzer::default();
+    let score = analyzer
+        .analyze_file(&path_buf)
+        .map_err(|e| format!("Failed to analyze: {:?}", e))?;
+
+    Ok(QualityScoreDto {
+        path,
+        sharpness: score.sharpness,
+        contrast: score.contrast,
+        brightness: score.brightness,
+        overall: score.overall,
+    })
 }
 
 /// Restore files from trash (macOS only)

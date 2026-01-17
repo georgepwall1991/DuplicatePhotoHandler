@@ -16,6 +16,7 @@ pub fn run() {
             commands::is_scanning,
             commands::trash_files,
             commands::get_file_info,
+            commands::get_quality_score,
             commands::restore_from_trash,
         ])
         .setup(|app| {

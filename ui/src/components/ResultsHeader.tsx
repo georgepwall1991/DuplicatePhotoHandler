@@ -3,7 +3,7 @@ import type { ScanResult } from '../lib/types'
 
 type SortOption = 'size' | 'photos' | 'type'
 type FilterOption = 'all' | 'exact' | 'near' | 'similar'
-type SelectionStrategy = 'duplicates' | 'keepHighestRes' | 'keepMostRecent' | 'keepOldest' | 'keepLargest'
+type SelectionStrategy = 'duplicates' | 'keepHighestRes' | 'keepMostRecent' | 'keepOldest' | 'keepLargest' | 'keepSharpest'
 
 interface ResultsHeaderProps {
   results: ScanResult
@@ -135,6 +135,13 @@ export function ResultsHeader({
                 >
                   <div className="font-medium">Keep Most Recent</div>
                   <div className="text-xs text-gray-400">Select older versions for deletion</div>
+                </button>
+                <button
+                  onClick={() => onAutoSelect('keepSharpest')}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <div className="font-medium">Keep Sharpest</div>
+                  <div className="text-xs text-gray-400">Select blurrier versions for deletion</div>
                 </button>
               </div>
             </div>

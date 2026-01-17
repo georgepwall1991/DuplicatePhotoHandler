@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { invoke } from '../lib/tauri'
 
-import type { ScanResult, FileInfo } from '../lib/types'
+import type { ScanResult, FileInfo, QualityScore } from '../lib/types'
 import { DuplicateGroupCard } from './DuplicateGroupCard'
 import { ImagePreview } from './ImagePreview'
 import { ComparisonView } from './ComparisonView'
@@ -108,8 +108,8 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       return
     }
 
-    // For other strategies, we need file info
-    showToast('Analyzing photos...', 'info')
+    // For other strategies, we need file info or quality scores
+    showToast(strategy === 'keepSharpest' ? 'Analyzing sharpness...' : 'Analyzing photos...', 'info')
 
     const toDelete = new Set<string>()
 
@@ -117,38 +117,60 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       if (group.photos.length < 2) continue
 
       try {
-        // Fetch info for all photos in the group
-        const infos = await Promise.all(
-          group.photos.map(path => invoke<FileInfo>('get_file_info', { path }))
-        )
+        if (strategy === 'keepSharpest') {
+          // Fetch quality scores for all photos in the group
+          const scores = await Promise.all(
+            group.photos.map(path => invoke<QualityScore>('get_quality_score', { path }))
+          )
 
-        // Find the "best" photo based on strategy
-        let bestIdx = 0
-        for (let i = 1; i < infos.length; i++) {
-          const current = infos[i]
-          const best = infos[bestIdx]
-
-          if (strategy === 'keepHighestRes') {
-            const currentPixels = current.dimensions ? current.dimensions[0] * current.dimensions[1] : 0
-            const bestPixels = best.dimensions ? best.dimensions[0] * best.dimensions[1] : 0
-            if (currentPixels > bestPixels) bestIdx = i
-          } else if (strategy === 'keepLargest') {
-            if (current.size_bytes > best.size_bytes) bestIdx = i
-          } else if (strategy === 'keepOldest') {
-            if (current.modified && best.modified && current.modified < best.modified) bestIdx = i
-          } else if (strategy === 'keepMostRecent') {
-            if (current.modified && best.modified && current.modified > best.modified) bestIdx = i
+          // Find the sharpest photo (highest overall quality score)
+          let bestIdx = 0
+          for (let i = 1; i < scores.length; i++) {
+            if (scores[i].overall > scores[bestIdx].overall) {
+              bestIdx = i
+            }
           }
+
+          // Select all except the sharpest for deletion
+          scores.forEach((score, idx) => {
+            if (idx !== bestIdx) {
+              toDelete.add(score.path)
+            }
+          })
+        } else {
+          // Fetch file info for all photos in the group
+          const infos = await Promise.all(
+            group.photos.map(path => invoke<FileInfo>('get_file_info', { path }))
+          )
+
+          // Find the "best" photo based on strategy
+          let bestIdx = 0
+          for (let i = 1; i < infos.length; i++) {
+            const current = infos[i]
+            const best = infos[bestIdx]
+
+            if (strategy === 'keepHighestRes') {
+              const currentPixels = current.dimensions ? current.dimensions[0] * current.dimensions[1] : 0
+              const bestPixels = best.dimensions ? best.dimensions[0] * best.dimensions[1] : 0
+              if (currentPixels > bestPixels) bestIdx = i
+            } else if (strategy === 'keepLargest') {
+              if (current.size_bytes > best.size_bytes) bestIdx = i
+            } else if (strategy === 'keepOldest') {
+              if (current.modified && best.modified && current.modified < best.modified) bestIdx = i
+            } else if (strategy === 'keepMostRecent') {
+              if (current.modified && best.modified && current.modified > best.modified) bestIdx = i
+            }
+          }
+
+          // Select all except the best for deletion
+          infos.forEach((info, idx) => {
+            if (idx !== bestIdx) {
+              toDelete.add(info.path)
+            }
+          })
         }
-
-        // Select all except the best for deletion
-        infos.forEach((info, idx) => {
-          if (idx !== bestIdx) {
-            toDelete.add(info.path)
-          }
-        })
       } catch (error) {
-        console.error('Failed to get file info for group:', error)
+        console.error('Failed to analyze group:', error)
         // Fall back to selecting all except representative
         group.photos.forEach(photo => {
           if (photo !== group.representative) {
@@ -165,6 +187,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       keepLargest: 'smaller',
       keepOldest: 'newer',
       keepMostRecent: 'older',
+      keepSharpest: 'blurrier',
     }
     showToast(`Selected ${toDelete.size} ${strategyNames[strategy]} files for deletion`, 'info')
   }, [results.groups, showToast])

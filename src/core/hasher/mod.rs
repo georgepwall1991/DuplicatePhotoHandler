@@ -32,9 +32,11 @@
 mod algorithms;
 pub mod fast_decode;
 pub mod fast_resize;
+pub mod fusion;
 mod traits;
 
 pub use algorithms::{AverageHasher, DifferenceHasher, PerceptualHasher};
+pub use fusion::{FusionCompareResult, FusionConfidence, FusionHash, FusionHasher};
 pub use traits::{HashAlgorithm, HashAlgorithmKind, ImageHashValue, PerceptualHash};
 
 // Re-export PerceptualHash for external use
@@ -88,6 +90,9 @@ impl HasherConfig {
             }
             HashAlgorithmKind::Perceptual => {
                 Ok(Box::new(PerceptualHasher::new(self.hash_size)))
+            }
+            HashAlgorithmKind::Fusion => {
+                Ok(Box::new(FusionHasher::with_size(self.hash_size)))
             }
         }
     }
