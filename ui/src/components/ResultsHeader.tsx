@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react'
-import type { ScanResult } from '../lib/types'
+import { useEffect, useRef, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
+import { save } from '@tauri-apps/plugin-dialog'
+import type { ScanResult, ExportResult } from '../lib/types'
 
 type SortOption = 'size' | 'photos' | 'type'
 type FilterOption = 'all' | 'exact' | 'near' | 'similar'
@@ -43,6 +45,57 @@ export function ResultsHeader({
   hasSelection,
 }: ResultsHeaderProps) {
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [isExporting, setIsExporting] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+
+  // Export to CSV
+  const handleExportCsv = async () => {
+    try {
+      setIsExporting(true)
+      const filePath = await save({
+        defaultPath: 'duplicates.csv',
+        filters: [{ name: 'CSV', extensions: ['csv'] }],
+      })
+      if (filePath) {
+        const result = await invoke<ExportResult>('export_results_csv', { path: filePath })
+        if (result.success) {
+          alert(`Exported ${result.groups_exported} groups to CSV`)
+        }
+      }
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('Export failed: ' + error)
+    } finally {
+      setIsExporting(false)
+      setShowExportMenu(false)
+    }
+  }
+
+  // Export to HTML
+  const handleExportHtml = async () => {
+    try {
+      setIsExporting(true)
+      const filePath = await save({
+        defaultPath: 'duplicate-report.html',
+        filters: [{ name: 'HTML', extensions: ['html'] }],
+      })
+      if (filePath) {
+        const result = await invoke<ExportResult>('export_results_html', {
+          path: filePath,
+          title: 'Duplicate Photo Report'
+        })
+        if (result.success) {
+          alert(`Exported ${result.groups_exported} groups to HTML report`)
+        }
+      }
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('Export failed: ' + error)
+    } finally {
+      setIsExporting(false)
+      setShowExportMenu(false)
+    }
+  }
 
   // Keyboard shortcut: / to focus search
   useEffect(() => {
@@ -145,6 +198,50 @@ export function ResultsHeader({
                 </button>
               </div>
             </div>
+          </div>
+          {/* Export dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              disabled={isExporting}
+              className="px-5 py-2.5 glass-card rounded-xl text-gray-300 font-medium transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 flex items-center gap-2"
+            >
+              {isExporting ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  📤 Export
+                  <span className="text-gray-500 text-xs">▼</span>
+                </>
+              )}
+            </button>
+            {showExportMenu && !isExporting && (
+              <div className="absolute right-0 top-full mt-2 w-48 glass-card rounded-xl p-2 shadow-xl border border-white/10 z-50">
+                <button
+                  onClick={handleExportCsv}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <span>📊</span>
+                  <div>
+                    <div className="font-medium">Export CSV</div>
+                    <div className="text-xs text-gray-400">Spreadsheet format</div>
+                  </div>
+                </button>
+                <button
+                  onClick={handleExportHtml}
+                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <span>📄</span>
+                  <div>
+                    <div className="font-medium">Export HTML</div>
+                    <div className="text-xs text-gray-400">Visual report</div>
+                  </div>
+                </button>
+              </div>
+            )}
           </div>
           <button
             onClick={onNewScan}

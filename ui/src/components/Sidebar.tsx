@@ -2,6 +2,9 @@ interface SidebarProps {
   activeModule: string
   onNewScan: () => void
   potentialSavings?: number
+  isWatching?: boolean
+  watchedPaths?: string[]
+  onToggleWatch?: () => void
 }
 
 const formatBytes = (bytes: number): string => {
@@ -12,7 +15,7 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-export function Sidebar({ activeModule, onNewScan, potentialSavings }: SidebarProps) {
+export function Sidebar({ activeModule, onNewScan, potentialSavings, isWatching, watchedPaths, onToggleWatch }: SidebarProps) {
   const modules = [
     { id: 'duplicates', name: 'Duplicates', icon: '📸', available: true },
     { id: 'similar', name: 'Similar Photos', icon: '🖼️', available: false },
@@ -76,6 +79,47 @@ export function Sidebar({ activeModule, onNewScan, potentialSavings }: SidebarPr
             <div className="text-2xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
               {formatBytes(potentialSavings)}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Folder Watcher */}
+      {onToggleWatch && (
+        <div className="p-4 relative">
+          <div className="glass-card rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className={`text-lg ${isWatching ? 'animate-pulse' : ''}`}>
+                  {isWatching ? '👁️' : '👁️‍🗨️'}
+                </span>
+                <span className="text-sm font-medium text-white">Auto-Watch</span>
+              </div>
+              <button
+                onClick={onToggleWatch}
+                className={`w-12 h-6 rounded-full transition-all duration-300 ${
+                  isWatching
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500'
+                    : 'bg-gray-700'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300 ${
+                    isWatching ? 'translate-x-6' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="text-xs text-gray-400">
+              {isWatching
+                ? `Monitoring ${watchedPaths?.length || 0} folder${(watchedPaths?.length || 0) !== 1 ? 's' : ''}`
+                : 'Watch folders for new photos'}
+            </p>
+            {isWatching && watchedPaths && watchedPaths.length > 0 && (
+              <div className="mt-2 text-xs text-gray-500 truncate" title={watchedPaths.join(', ')}>
+                {watchedPaths[0].split('/').slice(-2).join('/')}
+                {watchedPaths.length > 1 && ` +${watchedPaths.length - 1} more`}
+              </div>
+            )}
           </div>
         </div>
       )}

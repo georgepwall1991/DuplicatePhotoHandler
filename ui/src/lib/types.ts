@@ -42,3 +42,23 @@ export interface QualityScore {
   brightness: number
   overall: number
 }
+
+// Export result from backend
+export interface ExportResult {
+  success: boolean
+  path: string
+  format: string
+  groups_exported: number
+}
+
+// Watcher events from backend
+export interface WatcherEvent {
+  Watcher: {
+    Started?: { path: string }
+    Stopped?: { path: string }
+    PhotoAdded?: { path: string }
+    PhotoModified?: { path: string }
+    PhotoRemoved?: { path: string }
+    Error?: { message: string }
+  }
+}

@@ -15,6 +15,7 @@ interface ScanViewProps {
   onScanComplete: (result: ScanResult) => void
   onScanCancel: () => void
   onProgress: (progress: { phase: string; percent: number; message: string }) => void
+  onPathsSelected?: (paths: string[]) => void
 }
 
 export function ScanView({
@@ -24,9 +25,15 @@ export function ScanView({
   onScanComplete,
   onScanCancel,
   onProgress,
+  onPathsSelected,
 }: ScanViewProps) {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [threshold, setThreshold] = useState(5)
+
+  const handlePathsChange = (paths: string[]) => {
+    setSelectedPaths(paths)
+    onPathsSelected?.(paths)
+  }
   const [isCancelling, setIsCancelling] = useState(false)
 
   const { stats, resetStats } = useScanEvents({ onProgress })
@@ -96,7 +103,7 @@ export function ScanView({
       <div className="mt-14 w-full max-w-md relative animate-fade-in" style={{ animationDelay: '0.1s' }}>
         <FolderSelector
           selectedPaths={selectedPaths}
-          onPathsChange={setSelectedPaths}
+          onPathsChange={handlePathsChange}
         />
       </div>
 
