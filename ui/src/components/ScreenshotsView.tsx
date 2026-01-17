@@ -40,15 +40,17 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     )
   }
 
-  const togglePath = (path: string) => {
-    const newSelected = new Set(selectedPaths)
-    if (newSelected.has(path)) {
-      newSelected.delete(path)
-    } else {
-      newSelected.add(path)
-    }
-    setSelectedPaths(newSelected)
-  }
+  const togglePath = useCallback((path: string) => {
+    setSelectedPaths(prev => {
+      const newSelected = new Set(prev)
+      if (newSelected.has(path)) {
+        newSelected.delete(path)
+      } else {
+        newSelected.add(path)
+      }
+      return newSelected
+    })
+  }, [])
 
   const selectAllVisible = useCallback(() => {
     const newSelected = new Set(selectedPaths)
@@ -74,7 +76,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     showToast('Selection cleared', 'info')
   }, [showToast])
 
-  const handleTrash = async () => {
+  const handleTrash = useCallback(async () => {
     if (selectedPaths.size === 0) return
 
     setIsDeleting(true)
@@ -87,7 +89,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
 
       if (result.trashed > 0) {
         const filenames = paths
-          .filter((_, i) => i < result.trashed)
+          .slice(0, result.trashed)
           .map(p => p.split('/').pop() || p)
         setLastTrashedFiles(filenames)
       }
@@ -106,9 +108,9 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     } finally {
       setIsDeleting(false)
     }
-  }
+  }, [selectedPaths, showToast])
 
-  const handleUndo = async () => {
+  const handleUndo = useCallback(async () => {
     if (lastTrashedFiles.length === 0) return
 
     setIsRestoring(true)
@@ -129,7 +131,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     } finally {
       setIsRestoring(false)
     }
-  }
+  }, [lastTrashedFiles, showToast])
 
   const selectedSize = Array.from(selectedPaths).reduce((acc, path) => {
     const screenshot = results.all_screenshots.find(s => s.path === path)
@@ -148,9 +150,9 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     })
   }, [])
 
-  const handlePreviewScreenshot = (screenshot: ScreenshotInfo) => {
+  const handlePreviewScreenshot = useCallback((screenshot: ScreenshotInfo) => {
     setPreviewImage(screenshot.path)
-  }
+  }, [])
 
   const renderAllTab = () => {
     if (results.all_screenshots.length === 0) {
@@ -214,9 +216,13 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
   return (
     <div className="flex-1 flex flex-col relative overflow-hidden">
       {/* Tab bar */}
-      <div className="border-b border-white/10 bg-white/5 backdrop-blur-sm sticky top-0 z-10">
+      <div className="border-b border-white/10 bg-white/5 backdrop-blur-sm sticky top-0 z-10" role="tablist" aria-label="Screenshot views">
         <div className="px-6 flex items-center h-16 gap-8">
           <button
+            id="all-tab"
+            role="tab"
+            aria-selected={activeTab === 'all'}
+            aria-controls="all-screenshots-panel"
             onClick={() => setActiveTab('all')}
             className={`pb-4 pt-2 font-medium text-sm transition-all relative ${
               activeTab === 'all'
@@ -235,6 +241,10 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
           </button>
 
           <button
+            id="duplicates-tab"
+            role="tab"
+            aria-selected={activeTab === 'duplicates'}
+            aria-controls="duplicates-panel"
             onClick={() => setActiveTab('duplicates')}
             className={`pb-4 pt-2 font-medium text-sm transition-all relative ${
               activeTab === 'duplicates'
@@ -289,6 +299,9 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
+            role="tabpanel"
+            id={activeTab === 'all' ? 'all-screenshots-panel' : 'duplicates-panel'}
+            aria-labelledby={activeTab === 'all' ? 'all-tab' : 'duplicates-tab'}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
