@@ -5,9 +5,10 @@ interface LargeFileGridProps {
   files: LargeFileInfo[]
   selectedPaths: Set<string>
   onToggleSelect: (path: string) => void
+  onPreview: (file: LargeFileInfo) => void
 }
 
-export function LargeFileGrid({ files, selectedPaths, onToggleSelect }: LargeFileGridProps) {
+export function LargeFileGrid({ files, selectedPaths, onToggleSelect, onPreview }: LargeFileGridProps) {
   if (files.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -31,6 +32,7 @@ export function LargeFileGrid({ files, selectedPaths, onToggleSelect }: LargeFil
           file={file}
           isSelected={selectedPaths.has(file.path)}
           onToggleSelect={() => onToggleSelect(file.path)}
+          onPreview={() => onPreview(file)}
         />
       ))}
     </div>

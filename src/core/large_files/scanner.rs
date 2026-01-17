@@ -92,7 +92,31 @@ impl LargeFileScanner {
     /// * `Ok(LargeFileScanResult)` - Scan results with large files
     /// * `Err(String)` - Error message if path doesn't exist
     pub fn scan(&self, paths: &[String]) -> Result<LargeFileScanResult, String> {
-        let start = std::time::Instant::now();
+        self.scan_with_progress(paths, |_, _, _| {})
+    }
+
+    /// Scan directories for large files with progress callback
+    ///
+    /// # Arguments
+    /// * `paths` - Slice of directory paths to scan
+    /// * `on_progress` - Callback called with (files_scanned, large_files_found, current_file)
+    ///
+    /// # Returns
+    /// * `Ok(LargeFileScanResult)` - Scan results with large files
+    /// * `Err(String)` - Error message if path doesn't exist
+    pub fn scan_with_progress<F>(
+        &self,
+        paths: &[String],
+        mut on_progress: F,
+    ) -> Result<LargeFileScanResult, String>
+    where
+        F: FnMut(u64, usize, &str),
+    {
+        use std::time::{Duration, Instant};
+
+        let start = Instant::now();
+        let mut last_progress_time = Instant::now();
+        const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 
         let mut heap: BinaryHeap<Reverse<LargeFileInfo>> = BinaryHeap::new();
         let mut total_size_bytes = 0u64;
@@ -119,6 +143,18 @@ impl LargeFileScanner {
                 }
 
                 files_scanned += 1;
+
+                // Report progress every 100 files OR every 100ms (whichever comes first)
+                // This prevents flooding the frontend while ensuring responsive updates
+                let now = Instant::now();
+                if files_scanned % 100 == 0 || now.duration_since(last_progress_time) >= PROGRESS_INTERVAL {
+                    on_progress(
+                        files_scanned,
+                        heap.len(),
+                        entry_path.to_str().unwrap_or(""),
+                    );
+                    last_progress_time = now;
+                }
 
                 // Get file metadata (O(1) operation)
                 if let Ok(metadata) = fs::metadata(entry_path) {
@@ -149,6 +185,9 @@ impl LargeFileScanner {
                 }
             }
         }
+
+        // Final progress update
+        on_progress(files_scanned, heap.len(), "");
 
         // Extract files from heap (they're in reverse order, so largest are at the end)
         let mut files: Vec<LargeFileInfo> = heap
