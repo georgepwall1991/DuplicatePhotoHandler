@@ -14,7 +14,8 @@ import {
   LayoutGrid,
   History,
   ShieldCheck,
-  Database
+  Database,
+  FolderTree,
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -38,7 +39,7 @@ const formatBytes = (bytes: number): string => {
 
 // Type guard to check if an item id is a valid ActiveModule
 const isActiveModule = (id: string): id is ActiveModule => {
-  return id === 'duplicates' || id === 'screenshots' || id === 'large'
+  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize'
 }
 
 export function Sidebar({
@@ -71,6 +72,7 @@ export function Sidebar({
       items: [
         { id: 'large', name: 'Large Files', hint: 'Space hogs', icon: HardDrive, available: true },
         { id: 'screenshots', name: 'Screenshots', hint: 'UI captures', icon: Smartphone, available: true },
+        { id: 'organize', name: 'Organize', hint: 'Sort by date', icon: FolderTree, available: true },
         { id: 'unorganized', name: 'Unorganized', hint: 'Loose files', icon: LayoutGrid, available: false }
       ]
     }

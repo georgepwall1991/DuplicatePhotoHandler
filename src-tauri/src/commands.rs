@@ -4,6 +4,9 @@ use duplicate_photo_cleaner::core::cache::{CacheBackend, SqliteCache};
 use duplicate_photo_cleaner::core::comparator::DuplicateGroup;
 use duplicate_photo_cleaner::core::hasher::HashAlgorithmKind;
 use duplicate_photo_cleaner::core::large_files::{LargeFileScanner, LargeFileScanResult};
+use duplicate_photo_cleaner::core::organize::{
+    OperationMode, OrganizeConfig, OrganizeExecutor, OrganizePlan, OrganizePlanner, OrganizeResult,
+};
 use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
 use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
 use duplicate_photo_cleaner::core::watcher::{FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent};
@@ -24,6 +27,8 @@ pub struct AppState {
     pub cancelled: Arc<AtomicBool>,
     /// Folder watcher for background monitoring
     pub watcher: Mutex<Option<FolderWatcher>>,
+    /// Stored organize plan for execution
+    pub organize_plan: Mutex<Option<OrganizePlan>>,
 }
 
 impl Default for AppState {
@@ -33,6 +38,7 @@ impl Default for AppState {
             scanning: Mutex::new(false),
             cancelled: Arc::new(AtomicBool::new(false)),
             watcher: Mutex::new(None),
+            organize_plan: Mutex::new(None),
         }
     }
 }
@@ -967,4 +973,106 @@ pub fn show_in_folder(path: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Progress event for organize operations
+#[derive(Clone, Serialize)]
+pub struct OrganizeProgress {
+    pub phase: String,
+    pub current: usize,
+    pub total: usize,
+    pub current_file: String,
+}
+
+/// Create an organization plan (preview)
+#[tauri::command]
+pub async fn create_organize_plan(
+    app: AppHandle,
+    config: OrganizeConfig,
+    state: State<'_, AppState>,
+) -> Result<OrganizePlan, String> {
+    let app_handle = app.clone();
+
+    let plan = tokio::task::spawn_blocking(move || {
+        OrganizePlanner::create_plan(&config, |scanned, current| {
+            let _ = app_handle.emit(
+                "organize-progress-event",
+                OrganizeProgress {
+                    phase: "Scanning".to_string(),
+                    current: scanned,
+                    total: 0,
+                    current_file: current.to_string(),
+                },
+            );
+        })
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))??;
+
+    // Store plan for later execution
+    if let Ok(mut stored) = state.organize_plan.lock() {
+        *stored = Some(plan.clone());
+    }
+
+    // Emit completion
+    let _ = app.emit(
+        "organize-progress-event",
+        OrganizeProgress {
+            phase: "PlanReady".to_string(),
+            current: plan.total_files,
+            total: plan.total_files,
+            current_file: String::new(),
+        },
+    );
+
+    Ok(plan)
+}
+
+/// Execute the stored organization plan
+#[tauri::command]
+pub async fn execute_organize_plan(
+    app: AppHandle,
+    operation: OperationMode,
+    state: State<'_, AppState>,
+) -> Result<OrganizeResult, String> {
+    let plan = {
+        let stored = state.organize_plan.lock().map_err(|e| e.to_string())?;
+        stored.clone().ok_or("No plan available")?
+    };
+
+    let app_handle = app.clone();
+
+    let result = tokio::task::spawn_blocking(move || {
+        OrganizeExecutor::execute(&plan, operation, |current, total, filename| {
+            let _ = app_handle.emit(
+                "organize-progress-event",
+                OrganizeProgress {
+                    phase: "Organizing".to_string(),
+                    current,
+                    total,
+                    current_file: filename.to_string(),
+                },
+            );
+        })
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))??;
+
+    // Emit completion
+    let _ = app.emit(
+        "organize-progress-event",
+        OrganizeProgress {
+            phase: "Complete".to_string(),
+            current: result.files_processed,
+            total: result.files_processed,
+            current_file: String::new(),
+        },
+    );
+
+    // Clear the stored plan
+    if let Ok(mut stored) = state.organize_plan.lock() {
+        *stored = None;
+    }
+
+    Ok(result)
 }

@@ -9,6 +9,7 @@ import { ScreenshotsView } from './components/ScreenshotsView'
 import { ScreenshotScanView } from './components/ScreenshotScanView'
 import { LargeFilesView } from './components/LargeFilesView'
 import { LargeFileScanView } from './components/LargeFileScanView'
+import { OrganizeView } from './components/OrganizeView'
 import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
@@ -326,6 +327,20 @@ function AppContent() {
                 </motion.div>
               )}
             </>
+          )}
+
+          {/* Organize Module */}
+          {activeModule === 'organize' && (
+            <motion.div
+              key="organize"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+              className="flex-1 glass-strong overflow-hidden shadow-2xl"
+            >
+              <OrganizeView />
+            </motion.div>
           )}
         </AnimatePresence>
       </main>
