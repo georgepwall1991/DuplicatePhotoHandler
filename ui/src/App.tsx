@@ -395,6 +395,13 @@ function AppContent() {
                   <UnorganizedView
                     results={unorganizedResults}
                     onNewScan={handleNewScan}
+                    onOrganize={(paths) => {
+                      // Navigate to organize module
+                      setActiveModule('organize')
+                      // The OrganizeView will need to pick up these paths
+                      // For now, just show a toast with guidance
+                      showToast(`Select ${paths.length} folder(s) in Organize to sort these files`, 'info')
+                    }}
                   />
                 </motion.div>
               )}

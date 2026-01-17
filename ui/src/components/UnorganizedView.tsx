@@ -12,6 +12,8 @@ import {
   ExternalLink,
   CheckSquare,
   Square,
+  FolderTree,
+  Folder,
 } from 'lucide-react'
 import { ImagePreview } from './ImagePreview'
 import type { UnorganizedResult, UnorganizedFile, UnorganizedReason } from '../lib/types'
@@ -19,6 +21,7 @@ import type { UnorganizedResult, UnorganizedFile, UnorganizedReason } from '../l
 interface UnorganizedViewProps {
   results: UnorganizedResult
   onNewScan: () => void
+  onOrganize?: (paths: string[]) => void
 }
 
 const formatBytes = (bytes: number): string => {
@@ -47,7 +50,7 @@ function ReasonBadge({ reason }: { reason: UnorganizedReason }) {
   )
 }
 
-export function UnorganizedView({ results, onNewScan }: UnorganizedViewProps) {
+export function UnorganizedView({ results, onNewScan, onOrganize }: UnorganizedViewProps) {
   const [selectedFilter, setSelectedFilter] = useState<UnorganizedReason | 'all'>('all')
   const [previewFile, setPreviewFile] = useState<UnorganizedFile | null>(null)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
@@ -86,6 +89,50 @@ export function UnorganizedView({ results, onNewScan }: UnorganizedViewProps) {
   }, [selectedPaths.size, filteredFiles])
 
   const allSelected = selectedPaths.size === filteredFiles.length && filteredFiles.length > 0
+
+  const selectedSize = useMemo(() => {
+    return results.files
+      .filter(f => selectedPaths.has(f.path))
+      .reduce((sum, f) => sum + f.size_bytes, 0)
+  }, [results.files, selectedPaths])
+
+  const handleShowSelectedInFinder = useCallback(async () => {
+    // Get unique parent folders from selected files
+    const parentFolders = new Set<string>()
+    for (const path of selectedPaths) {
+      const file = results.files.find(f => f.path === path)
+      if (file) {
+        // Get the parent folder path
+        const lastSlash = path.lastIndexOf('/')
+        if (lastSlash > 0) {
+          parentFolders.add(path.substring(0, lastSlash))
+        }
+      }
+    }
+    // Open each unique folder (limit to first 5 to avoid opening too many)
+    const foldersToOpen = Array.from(parentFolders).slice(0, 5)
+    for (const folder of foldersToOpen) {
+      try {
+        await invoke('show_in_folder', { path: folder })
+      } catch (error) {
+        console.error('Failed to show folder:', error)
+      }
+    }
+  }, [selectedPaths, results.files])
+
+  const handleOrganizeSelected = useCallback(() => {
+    if (onOrganize && selectedPaths.size > 0) {
+      // Get unique parent folders of selected files
+      const parentFolders = new Set<string>()
+      for (const path of selectedPaths) {
+        const lastSlash = path.lastIndexOf('/')
+        if (lastSlash > 0) {
+          parentFolders.add(path.substring(0, lastSlash))
+        }
+      }
+      onOrganize(Array.from(parentFolders))
+    }
+  }, [selectedPaths, onOrganize])
 
   return (
     <div className="flex h-full flex-col">
@@ -126,6 +173,35 @@ export function UnorganizedView({ results, onNewScan }: UnorganizedViewProps) {
               )}
               {allSelected ? 'Deselect all' : 'Select all'}
             </button>
+
+            {selectedPaths.size > 0 && (
+              <>
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  onClick={handleShowSelectedInFinder}
+                  className="flex items-center gap-2 border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-300 transition hover:border-white/20 hover:text-white"
+                  title="Show selected files in Finder"
+                >
+                  <Folder className="h-4 w-4" />
+                  Show in Finder
+                </motion.button>
+
+                {onOrganize && (
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    onClick={handleOrganizeSelected}
+                    className="flex items-center gap-2 border border-purple-500/30 bg-purple-500/20 px-4 py-2 text-sm font-medium text-purple-200 transition hover:border-purple-500/50 hover:bg-purple-500/30"
+                  >
+                    <FolderTree className="h-4 w-4" />
+                    Organize {selectedPaths.size} ({formatBytes(selectedSize)})
+                  </motion.button>
+                )}
+              </>
+            )}
           </div>
         </div>
 
