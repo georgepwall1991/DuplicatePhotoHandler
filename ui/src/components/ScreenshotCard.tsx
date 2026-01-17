@@ -44,10 +44,12 @@ const getConfidenceBadgeColor = (confidence: string): string => {
 
 function ImageThumbnail({
   src,
+  alt,
   className = '',
   fallback = <FileImage className="w-5 h-5 text-gray-600" />,
 }: {
   src: string
+  alt: string
   className?: string
   fallback?: React.ReactNode
 }) {
@@ -74,7 +76,7 @@ function ImageThumbnail({
       {!loaded && <div className="absolute inset-0 skeleton" />}
       <img
         src={assetUrl}
-        alt=""
+        alt={alt}
         className={`w-full h-full object-cover transition-all duration-500 ${
           loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-110'
         }`}
@@ -102,10 +104,12 @@ export function ScreenshotCard({
     >
       {/* Thumbnail with overlays */}
       <div className="relative aspect-square overflow-hidden bg-white/5">
-        <ImageThumbnail src={screenshot.path} className="w-full h-full" />
+        <ImageThumbnail src={screenshot.path} alt={`Screenshot: ${fileName}`} className="w-full h-full" />
 
         {/* Checkbox - top-left */}
         <motion.button
+          aria-label={isSelected ? 'Deselect screenshot' : 'Select screenshot'}
+          aria-pressed={isSelected}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={(e) => {
