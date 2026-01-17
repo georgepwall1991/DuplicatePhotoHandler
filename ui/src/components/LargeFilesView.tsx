@@ -146,7 +146,8 @@ export function LargeFilesView({ results, onNewScan }: LargeFilesViewProps) {
         confirmLabel={isDeleting ? 'Deleting...' : 'Delete'}
         onConfirm={handleDelete}
         onCancel={() => setShowConfirm(false)}
-        isDestructive
+        variant="danger"
+        isLoading={isDeleting}
       />
     </div>
   )
