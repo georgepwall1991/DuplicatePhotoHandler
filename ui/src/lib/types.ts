@@ -104,4 +104,56 @@ export interface LargeFileScanResult {
 }
 
 // Module routing
-export type ActiveModule = 'duplicates' | 'screenshots' | 'large'
+export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize'
+
+// Organization types
+export type FolderStructure = 'year_month' | 'year_month_day' | 'year_month_flat'
+export type OperationMode = 'copy' | 'move'
+
+export interface OrganizeConfig {
+  source_paths: string[]
+  destination: string
+  structure: FolderStructure
+  operation: OperationMode
+}
+
+export interface PlannedFile {
+  source: string
+  destination: string
+  filename: string
+  date: string | null
+  size_bytes: number
+  has_conflict: boolean
+}
+
+export interface YearSummary {
+  year: number
+  count: number
+  size_bytes: number
+}
+
+export interface OrganizePlan {
+  id: string
+  files: PlannedFile[]
+  total_files: number
+  total_size_bytes: number
+  date_range: [string, string] | null
+  by_year: YearSummary[]
+  no_date_count: number
+  conflict_count: number
+}
+
+export interface OrganizeResult {
+  files_processed: number
+  folders_created: number
+  total_size_bytes: number
+  duration_ms: number
+  errors: string[]
+}
+
+export interface OrganizeProgress {
+  phase: string
+  current: number
+  total: number
+  current_file: string
+}
