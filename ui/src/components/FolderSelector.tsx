@@ -47,9 +47,8 @@ export function FolderSelector({ selectedPaths, onPathsChange }: FolderSelectorP
       whileHover={{ scale: 1.01, y: -2 }}
       whileTap={{ scale: 0.99 }}
       onClick={handleSelectFolder}
-      className={`w-full glass-card p-1 text-left transition-all duration-500 group relative overflow-hidden border-2 ${
-        isDragging ? 'bg-purple-500/10 border-purple-500/50' : 'border-white/10'
-      }`}
+      className={`w-full glass-card p-1 text-left transition-all duration-500 group relative overflow-hidden border-2 ${isDragging ? 'bg-purple-500/10 border-purple-500/50' : 'border-white/10'
+        }`}
     >
       <div className="flex items-center gap-6 p-5">
         <div className="relative">
@@ -87,14 +86,17 @@ export function FolderSelector({ selectedPaths, onPathsChange }: FolderSelectorP
             Library Path
           </div>
           <div className="flex flex-col gap-0.5">
-            <div className={`truncate text-lg font-bold tracking-tight ${isDragging ? 'text-purple-300' : 'text-white'}`}>
+            <div
+              className={`line-clamp-2 text-lg font-bold tracking-tight leading-tight ${isDragging ? 'text-purple-300' : 'text-white'}`}
+              title={selectedPaths.join(', ')}
+            >
               {isDragging
                 ? 'Drop to scan'
                 : selectedPaths.length > 0
                   ? selectedPaths.map(p => p.split('/').pop()).join(', ')
                   : 'Add folders to process'}
             </div>
-            <div className="text-xs font-medium text-gray-500 truncate">
+            <div className="text-xs font-medium text-gray-500 line-clamp-2">
               {isDragging
                 ? 'Ready to import'
                 : selectedPaths.length > 0
@@ -104,9 +106,8 @@ export function FolderSelector({ selectedPaths, onPathsChange }: FolderSelectorP
           </div>
         </div>
 
-        <div className={`w-10 h-10 flex items-center justify-center transition-all duration-300 border-2 ${
-          isDragging ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-gray-600 border-white/10 group-hover:text-white group-hover:bg-white/10'
-        }`}>
+        <div className={`w-10 h-10 flex items-center justify-center transition-all duration-300 border-2 ${isDragging ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-white/5 text-gray-600 border-white/10 group-hover:text-white group-hover:bg-white/10'
+          }`}>
           <ArrowRight className={`w-5 h-5 transition-transform duration-500 ${isDragging ? 'translate-y-1 rotate-90' : 'group-hover:translate-x-1'}`} />
         </div>
       </div>

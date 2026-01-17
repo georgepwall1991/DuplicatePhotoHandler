@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { FolderTree, Copy, Move, Calendar, ChevronDown } from 'lucide-react'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open } from '../lib/tauri'
 
 import { FolderSelector } from './FolderSelector'
 import { ScanButton } from './ScanButton'
@@ -170,9 +170,8 @@ export function OrganizeConfigView({ onStartPreview, isLoading = false, initialP
                       setStructure(opt.value)
                       setShowStructureDropdown(false)
                     }}
-                    className={`w-full px-4 py-3 text-left hover:bg-white/10 transition-colors ${
-                      structure === opt.value ? 'bg-violet-500/20' : ''
-                    }`}
+                    className={`w-full px-4 py-3 text-left hover:bg-white/10 transition-colors ${structure === opt.value ? 'bg-violet-500/20' : ''
+                      }`}
                   >
                     <div className="text-white">{opt.label}</div>
                     <div className="text-xs text-slate-500">{opt.example}</div>
@@ -195,11 +194,10 @@ export function OrganizeConfigView({ onStartPreview, isLoading = false, initialP
               <button
                 type="button"
                 onClick={() => setOperation('copy')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 border transition-all ${
-                  operation === 'copy'
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 border transition-all ${operation === 'copy'
                     ? 'border-violet-400/40 bg-violet-500/20 text-violet-200'
                     : 'border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20'
-                }`}
+                  }`}
               >
                 <Copy className="w-4 h-4" />
                 <span className="font-medium">Copy</span>
@@ -208,11 +206,10 @@ export function OrganizeConfigView({ onStartPreview, isLoading = false, initialP
               <button
                 type="button"
                 onClick={() => setOperation('move')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 border transition-all ${
-                  operation === 'move'
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 border transition-all ${operation === 'move'
                     ? 'border-violet-400/40 bg-violet-500/20 text-violet-200'
                     : 'border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20'
-                }`}
+                  }`}
               >
                 <Move className="w-4 h-4" />
                 <span className="font-medium">Move</span>

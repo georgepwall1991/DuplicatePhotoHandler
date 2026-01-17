@@ -1,4 +1,6 @@
 import { LargeFileCard } from './LargeFileCard'
+import { EmptyState } from './EmptyState'
+import { HardDrive } from 'lucide-react'
 import type { LargeFileInfo } from '../lib/types'
 
 interface LargeFileGridProps {
@@ -11,12 +13,11 @@ interface LargeFileGridProps {
 export function LargeFileGrid({ files, selectedPaths, onToggleSelect, onPreview }: LargeFileGridProps) {
   if (files.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <p className="text-lg font-medium text-slate-400">No large files found</p>
-        <p className="mt-2 text-sm text-slate-500">
-          All files in your library are below the size threshold
-        </p>
-      </div>
+      <EmptyState
+        icon={HardDrive}
+        title="No large files found"
+        message="All files in your library are below the size threshold."
+      />
     )
   }
 

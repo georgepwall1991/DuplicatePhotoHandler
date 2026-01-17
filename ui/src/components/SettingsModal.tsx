@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../lib/tauri'
 import {
   X,
   Database,
@@ -144,9 +144,8 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition ${
-                        isActive ? 'text-white' : 'text-slate-400 hover:text-white'
-                      }`}
+                      className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition ${isActive ? 'text-white' : 'text-slate-400 hover:text-white'
+                        }`}
                     >
                       <Icon className="h-4 w-4" />
                       {tab.label}
@@ -237,11 +236,10 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                             </div>
                             <button
                               onClick={() => setSettings(s => ({ ...s, confirmBeforeTrash: !s.confirmBeforeTrash }))}
-                              className={`relative h-6 w-11  border transition ${
-                                settings.confirmBeforeTrash
-                                  ? 'border-cyan-400/40 bg-cyan-500/40'
-                                  : 'border-white/10 bg-white/5'
-                              }`}
+                              className={`relative h-6 w-11  border transition ${settings.confirmBeforeTrash
+                                ? 'border-cyan-400/40 bg-cyan-500/40'
+                                : 'border-white/10 bg-white/5'
+                                }`}
                             >
                               <motion.span
                                 animate={{ x: settings.confirmBeforeTrash ? 20 : 0 }}
@@ -261,11 +259,10 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                             </div>
                             <button
                               onClick={() => setSettings(s => ({ ...s, includeHidden: !s.includeHidden }))}
-                              className={`relative h-6 w-11  border transition ${
-                                settings.includeHidden
-                                  ? 'border-cyan-400/40 bg-cyan-500/40'
-                                  : 'border-white/10 bg-white/5'
-                              }`}
+                              className={`relative h-6 w-11  border transition ${settings.includeHidden
+                                ? 'border-cyan-400/40 bg-cyan-500/40'
+                                : 'border-white/10 bg-white/5'
+                                }`}
                             >
                               <motion.span
                                 animate={{ x: settings.includeHidden ? 20 : 0 }}
@@ -338,11 +335,10 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                           <button
                             onClick={handleClearCache}
                             disabled={isClearingCache || !cacheInfo}
-                            className={`flex items-center gap-2  border px-4 py-2 text-sm font-medium transition ${
-                              clearSuccess
-                                ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
-                                : 'border-red-400/30 bg-red-500/10 text-red-300 hover:bg-red-500/20'
-                            } disabled:cursor-not-allowed disabled:opacity-50`}
+                            className={`flex items-center gap-2  border px-4 py-2 text-sm font-medium transition ${clearSuccess
+                              ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                              : 'border-red-400/30 bg-red-500/10 text-red-300 hover:bg-red-500/20'
+                              } disabled:cursor-not-allowed disabled:opacity-50`}
                           >
                             {isClearingCache ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -382,7 +378,7 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                             <Zap className="h-10 w-10 text-white" />
                           </div>
                         </div>
-                        <h3 className="mt-6 text-xl font-bold text-white">Lensly Duplicate Studio</h3>
+                        <h3 className="mt-6 text-xl font-bold text-white">Duplicate Studio</h3>
                         <p className="mt-1 text-sm text-slate-400">Version 2.4.0</p>
                       </div>
 

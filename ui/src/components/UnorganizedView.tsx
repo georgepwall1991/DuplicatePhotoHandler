@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../lib/tauri'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft,
@@ -212,11 +212,10 @@ export function UnorganizedView({ results, onNewScan, onOrganize }: UnorganizedV
             <button
               type="button"
               onClick={() => setSelectedFilter('all')}
-              className={`px-3 py-1 text-xs font-medium transition ${
-                selectedFilter === 'all'
+              className={`px-3 py-1 text-xs font-medium transition ${selectedFilter === 'all'
                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                   : 'text-slate-400 hover:text-white border border-transparent'
-              }`}
+                }`}
             >
               All ({results.total_files})
             </button>
@@ -225,11 +224,10 @@ export function UnorganizedView({ results, onNewScan, onOrganize }: UnorganizedV
                 key={summary.reason}
                 type="button"
                 onClick={() => setSelectedFilter(summary.reason)}
-                className={`px-3 py-1 text-xs font-medium transition ${
-                  selectedFilter === summary.reason
+                className={`px-3 py-1 text-xs font-medium transition ${selectedFilter === summary.reason
                     ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                     : 'text-slate-400 hover:text-white border border-transparent'
-                }`}
+                  }`}
               >
                 {reasonLabels[summary.reason]?.label || summary.reason} ({summary.count})
               </button>
@@ -247,11 +245,10 @@ export function UnorganizedView({ results, onNewScan, onOrganize }: UnorganizedV
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.02 }}
-              className={`group flex items-center gap-4 p-3 border transition cursor-pointer ${
-                selectedPaths.has(file.path)
+              className={`group flex items-center gap-4 p-3 border transition cursor-pointer ${selectedPaths.has(file.path)
                   ? 'bg-purple-500/10 border-purple-500/30'
                   : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04] hover:border-white/10'
-              }`}
+                }`}
               onClick={() => setPreviewFile(file)}
             >
               {/* Selection checkbox */}

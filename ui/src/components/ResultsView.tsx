@@ -6,6 +6,8 @@ import type { ScanResult, FileInfo, QualityScore } from '../lib/types'
 import { DuplicateGroupCard } from './DuplicateGroupCard'
 import { ImagePreview } from './ImagePreview'
 import { ComparisonView } from './ComparisonView'
+import { ShortcutsHelp } from './ShortcutsHelp'
+import { Search, Check, Keyboard } from 'lucide-react'
 import { ResultsHeader, type SortOption, type FilterOption, type SelectionStrategy } from './ResultsHeader'
 import { ResultsSummary } from './ResultsSummary'
 import { ActionBar } from './ActionBar'
@@ -56,6 +58,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
   const [showConfirm, setShowConfirm] = useState(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [comparison, setComparison] = useState<{ left: string; right: string } | null>(null)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   const [sortBy, setSortBy] = useState<SortOption>('size')
   const [filterBy, setFilterBy] = useState<FilterOption>('all')
   const [searchTerm, setSearchTerm] = useState('')
@@ -378,6 +381,11 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
             handleUndo()
           }
           break
+
+        case '?':
+          e.preventDefault()
+          setShowShortcuts(prev => !prev)
+          break
       }
     }
 
@@ -401,7 +409,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       const isFiltered = results.groups.length > 0
       return (
         <EmptyState
-          icon={isFiltered ? '🔍' : '🎉'}
+          icon={isFiltered ? Search : Check}
           title={isFiltered ? 'No matches for filter' : 'No Duplicates Found!'}
           message={isFiltered ? 'Try changing the filter to see more results.' : 'Your photo library is clean.'}
         />
@@ -412,8 +420,8 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       <div className="space-y-4 pb-32">
         <AnimatePresence>
           {filteredAndSortedGroups.map((group, index) => (
-            <motion.div 
-              key={group.id} 
+            <motion.div
+              key={group.id}
               data-group-card
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -470,6 +478,19 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
         {renderContent()}
       </div>
 
+      {/* Floating Shortcuts Trigger */}
+      <motion.button
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={() => setShowShortcuts(true)}
+        className="fixed bottom-6 right-6 z-40 w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-gray-500 hover:text-white hover:bg-brand-primary/20 hover:border-brand-primary/50 transition-all shadow-lg backdrop-blur-sm"
+        title="Keyboard Shortcuts (?)"
+      >
+        <Keyboard className="w-5 h-5" />
+      </motion.button>
+
       {/* Action bar */}
       <ActionBar
         selectedCount={selectedFiles.size}
@@ -508,6 +529,9 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
         isSelected={previewImage ? selectedFiles.has(previewImage) : undefined}
         onDelete={previewImage ? () => toggleFile(previewImage) : undefined}
       />
+
+      {/* Shortcuts Help Modal */}
+      <ShortcutsHelp isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
 
       {/* Comparison View Modal */}
       {comparison && (

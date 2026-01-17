@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '../lib/tauri'
 import { motion } from 'framer-motion'
 import { Trash2, CheckSquare, Square, ArrowLeft, HardDrive } from 'lucide-react'
 import { LargeFileGrid } from './LargeFileGrid'

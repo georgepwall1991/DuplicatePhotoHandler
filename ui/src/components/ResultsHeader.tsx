@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { invoke } from '@tauri-apps/api/core'
-import { save } from '@tauri-apps/plugin-dialog'
-import { 
-  Search, 
-  Download, 
-  Plus, 
-  Filter, 
-  CheckSquare, 
-  FileText, 
-  Table, 
+import { invoke, open, save } from '../lib/tauri'
+import {
+  Search,
+  Download,
+  Plus,
+  Filter,
+  CheckSquare,
+  FileText,
+  Table,
   ChevronDown,
   AlertCircle,
   Zap,
@@ -39,7 +38,7 @@ interface ResultsHeaderProps {
 }
 
 const formatDuration = (ms: number): string => {
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`
 }
 
 export function ResultsHeader({
@@ -117,7 +116,7 @@ export function ResultsHeader({
     <div className="px-8 py-8 border-b border-white/5 relative z-30">
       <div className="flex items-start justify-between mb-8">
         <div>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-3 mb-2"
@@ -125,11 +124,11 @@ export function ResultsHeader({
             <h2 className="text-3xl font-black text-white tracking-tighter">
               Analysis Results
             </h2>
-            <div className="px-3 py-1  bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase tracking-widest">
+            <div className="px-3 py-1 bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-[10px] font-black uppercase tracking-widest">
               {formatDuration(results.duration_ms)}
             </div>
           </motion.div>
-          <p className="text-gray-500 font-medium">
+          <p className="text-text-muted font-medium">
             Reviewing <span className="text-white">{results.total_photos.toLocaleString()}</span> assets across your library.
           </p>
         </div>
@@ -140,7 +139,7 @@ export function ResultsHeader({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               onClick={onClearSelection}
-              className="px-5 py-3  bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all"
+              className="px-5 py-3 bg-white/5 text-text-muted hover:text-white hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all"
             >
               Reset Selection
             </motion.button>
@@ -149,20 +148,20 @@ export function ResultsHeader({
           <div className="relative">
             <button
               onClick={() => setShowAutoSelectMenu(!showAutoSelectMenu)}
-              className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white  text-xs font-black uppercase tracking-widest transition-all flex items-center gap-3 shadow-lg shadow-purple-500/20"
+              className="px-6 py-3 bg-brand-primary hover:bg-brand-secondary text-white text-xs font-black uppercase tracking-widest transition-all flex items-center gap-3 shadow-lg shadow-brand-primary/20"
             >
               <CheckSquare className="w-4 h-4" />
               Smart Select
               <ChevronDown className={`w-3 h-3 transition-transform ${showAutoSelectMenu ? 'rotate-180' : ''}`} />
             </button>
-            
+
             <AnimatePresence>
               {showAutoSelectMenu && (
                 <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute right-0 top-full mt-3 w-64 glass-strong  p-3 shadow-2xl z-50 border border-white/10"
+                  className="absolute right-0 top-full mt-3 w-64 glass-strong p-3 shadow-2xl z-50 border border-white/10"
                 >
                   {[
                     { id: 'duplicates', label: 'Recommended', sub: 'AI choice for each group' },
@@ -177,12 +176,12 @@ export function ResultsHeader({
                         onAutoSelect(strategy.id as SelectionStrategy)
                         setShowAutoSelectMenu(false)
                       }}
-                      className="w-full p-3 text-left hover:bg-white/5  transition-colors group"
+                      className="w-full p-3 text-left hover:bg-white/5 transition-colors group"
                     >
-                      <div className="text-[10px] font-black uppercase tracking-widest text-white mb-0.5 group-hover:text-purple-400">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-white mb-0.5 group-hover:text-brand-primary">
                         {strategy.label}
                       </div>
-                      <div className="text-[10px] text-gray-500 font-medium">{strategy.sub}</div>
+                      <div className="text-[10px] text-text-muted font-medium">{strategy.sub}</div>
                     </button>
                   ))}
                 </motion.div>
@@ -194,29 +193,29 @@ export function ResultsHeader({
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
               disabled={isExporting}
-              className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white  transition-all"
+              className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all"
             >
               <Download className="w-5 h-5" />
             </button>
-            
+
             <AnimatePresence>
               {showExportMenu && (
                 <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute right-0 top-full mt-3 w-48 glass-strong  p-2 shadow-2xl z-50 border border-white/10"
+                  className="absolute right-0 top-full mt-3 w-48 glass-strong p-2 shadow-2xl z-50 border border-white/10"
                 >
                   <button
                     onClick={handleExportCsv}
-                    className="w-full flex items-center gap-3 p-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5  transition-colors"
+                    className="w-full flex items-center gap-3 p-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors"
                   >
                     <Table className="w-4 h-4 text-green-400" />
                     Export CSV
                   </button>
                   <button
                     onClick={handleExportHtml}
-                    className="w-full flex items-center gap-3 p-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5  transition-colors"
+                    className="w-full flex items-center gap-3 p-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 transition-colors"
                   >
                     <FileText className="w-4 h-4 text-blue-400" />
                     Export HTML
@@ -228,7 +227,7 @@ export function ResultsHeader({
 
           <button
             onClick={onNewScan}
-            className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white  transition-all"
+            className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white transition-all"
           >
             <Plus className="w-5 h-5" />
           </button>
@@ -236,7 +235,7 @@ export function ResultsHeader({
       </div>
 
       <div className="flex items-center gap-6">
-        <div className="relative flex-1">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
           <input
             ref={searchInputRef}
@@ -244,11 +243,11 @@ export function ResultsHeader({
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search filenames..."
-            className="w-full pl-12 pr-4 py-4  bg-white/5 border border-white/5 text-sm font-medium text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30 transition-all"
+            className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/5 text-sm font-medium text-white placeholder-gray-600 focus:outline-none focus:border-brand-primary/30 transition-all"
           />
         </div>
 
-        <div className="flex items-center gap-2 p-1.5 bg-white/5  border border-white/5">
+        <div className="flex items-center gap-2 p-1.5 bg-white/5 border border-white/5">
           {[
             { id: 'all', label: 'All' },
             { id: 'exact', label: 'Exact' },
@@ -260,9 +259,8 @@ export function ResultsHeader({
               <button
                 key={option.id}
                 onClick={() => onFilterChange(option.id as FilterOption)}
-                className={`px-4 py-2.5  text-[10px] font-black uppercase tracking-widest transition-all ${
-                  active ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'text-gray-500 hover:text-white'
-                }`}
+                className={`px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/20' : 'text-text-muted hover:text-white'
+                  }`}
               >
                 {option.label}
               </button>
@@ -272,7 +270,7 @@ export function ResultsHeader({
 
         <div className="w-px h-8 bg-white/10" />
 
-        <div className="flex items-center gap-2 p-1.5 bg-white/5  border border-white/5">
+        <div className="flex items-center gap-2 p-1.5 bg-white/5 border border-white/5">
           {[
             { id: 'size', label: 'Size', icon: Zap },
             { id: 'photos', label: 'Count', icon: Layers },
@@ -284,9 +282,8 @@ export function ResultsHeader({
               <button
                 key={option.id}
                 onClick={() => onSortChange(option.id as SortOption)}
-                className={`flex items-center gap-2 px-4 py-2.5  text-[10px] font-black uppercase tracking-widest transition-all ${
-                  active ? 'bg-white text-[#0a0a0f] shadow-lg' : 'text-gray-500 hover:text-white'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'bg-white text-surface-950 shadow-lg' : 'text-text-muted hover:text-white'
+                  }`}
               >
                 <Icon className="w-3.5 h-3.5" />
                 {option.label}
@@ -298,11 +295,10 @@ export function ResultsHeader({
         {results.errors && results.errors.length > 0 && (
           <button
             onClick={onToggleErrors}
-            className={`flex items-center gap-2 px-5 py-3  transition-all ${
-              showErrors 
-                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' 
+            className={`flex items-center gap-2 px-5 py-3 transition-all ${showErrors
+                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
                 : 'bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20'
-            } text-[10px] font-black uppercase tracking-widest`}
+              } text-[10px] font-black uppercase tracking-widest`}
           >
             <AlertCircle className="w-4 h-4" />
             {results.errors.length} Warnings
@@ -311,12 +307,12 @@ export function ResultsHeader({
       </div>
 
       {(filterBy !== 'all' || searchTerm) && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="absolute -bottom-10 left-8 text-[10px] font-bold text-gray-500 uppercase tracking-widest"
+          className="absolute -bottom-10 left-8 text-[10px] font-bold text-text-muted uppercase tracking-widest"
         >
-          Filtered view: showing <span className="text-purple-400">{filteredCount}</span> of {results.groups.length} total clusters
+          Filtered view: showing <span className="text-brand-primary">{filteredCount}</span> of {results.groups.length} total clusters
         </motion.div>
       )}
     </div>
