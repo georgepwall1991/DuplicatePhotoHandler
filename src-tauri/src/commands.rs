@@ -673,7 +673,6 @@ pub async fn scan_screenshots(
 ) -> Result<ScreenshotScanResultDto, String> {
     use duplicate_photo_cleaner::core::metadata::extract_metadata;
     use duplicate_photo_cleaner::core::scanner::WalkDirScanner;
-    use duplicate_photo_cleaner::core::scanner::PhotoScanner;
     use duplicate_photo_cleaner::core::screenshot::is_screenshot;
     use std::time::Instant;
 
@@ -758,19 +757,8 @@ pub async fn scan_screenshots(
         }
     }
 
-    // Emit scan complete event
-    event_sender.send(Event::Pipeline(PipelineEvent::Completed {
-        summary: duplicate_photo_cleaner::events::PipelineSummary {
-            total_photos: screenshots.len(),
-            duplicate_groups: 0,
-            duplicate_count: 0,
-            potential_savings_bytes: 0,
-            duration_ms: 0,
-        },
-    }));
-
     // Run duplicate detection on screenshots only if we found any
-    let duplicate_groups = if !screenshot_paths.is_empty() && !cancelled.load(Ordering::SeqCst) {
+    let (duplicate_groups, duplicate_count, potential_savings) = if !screenshot_paths.is_empty() && !cancelled.load(Ordering::SeqCst) {
         let pipeline = Pipeline::builder()
             .paths(screenshot_paths.clone())
             .algorithm(algorithm)
@@ -783,11 +771,26 @@ pub async fn scan_screenshots(
         })
         .await
         {
-            Ok(Ok(result)) => result.groups.iter().map(DuplicateGroupDto::from).collect(),
-            _ => Vec::new(),
+            Ok(Ok(result)) => {
+                let groups: Vec<DuplicateGroupDto> = result.groups.iter().map(DuplicateGroupDto::from).collect();
+                let dup_count: usize = groups.iter().map(|g| g.photos.len().saturating_sub(1)).sum();
+                let savings: u64 = groups.iter()
+                    .flat_map(|g| g.photos.iter().skip(1))
+                    .map(|p| p.size)
+                    .sum();
+                (groups, dup_count, savings)
+            }
+            Ok(Err(e)) => {
+                log::error!("Screenshot duplicate detection failed: {}", e);
+                (Vec::new(), 0, 0)
+            }
+            Err(e) => {
+                log::error!("Screenshot duplicate detection task panicked: {}", e);
+                (Vec::new(), 0, 0)
+            }
         }
     } else {
-        Vec::new()
+        (Vec::new(), 0, 0)
     };
 
     // ALWAYS reset scanning state
