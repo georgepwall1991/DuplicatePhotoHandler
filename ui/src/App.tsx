@@ -7,12 +7,14 @@ import { ScanView } from './components/ScanView'
 import { ResultsView } from './components/ResultsView'
 import { ScreenshotsView } from './components/ScreenshotsView'
 import { ScreenshotScanView } from './components/ScreenshotScanView'
+import { LargeFilesView } from './components/LargeFilesView'
+import { LargeFileScanView } from './components/LargeFileScanView'
 import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
 
 export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
-import type { AppState, ScanResult, WatcherEvent, ActiveModule, ScreenshotScanResult } from './lib/types'
+import type { AppState, ScanResult, WatcherEvent, ActiveModule, ScreenshotScanResult, LargeFileScanResult } from './lib/types'
 
 function AppContent() {
   const [appState, setAppState] = useState<AppState>('idle')
@@ -21,6 +23,9 @@ function AppContent() {
   const [screenshotAppState, setScreenshotAppState] = useState<AppState>('idle')
   const [progress, setProgress] = useState({ phase: '', percent: 0, message: '' })
   const [screenshotProgress, setScreenshotProgress] = useState({ phase: '', percent: 0, message: '' })
+  const [largeFileResults, setLargeFileResults] = useState<LargeFileScanResult | null>(null)
+  const [largeFileAppState, setLargeFileAppState] = useState<AppState>('idle')
+  const [largeFileProgress, setLargeFileProgress] = useState({ phase: '', percent: 0, message: '' })
   const [isWatching, setIsWatching] = useState(false)
   const [watchedPaths, setWatchedPaths] = useState<string[]>([])
   const [scannedPaths, setScannedPaths] = useState<string[]>([])
@@ -88,6 +93,9 @@ function AppContent() {
     if (activeModule === 'screenshots') {
       setScreenshotResults(null)
       setScreenshotAppState('idle')
+    } else if (activeModule === 'large') {
+      setLargeFileResults(null)
+      setLargeFileAppState('idle')
     } else {
       setResults(null)
       setAppState('idle')
@@ -97,6 +105,11 @@ function AppContent() {
   const handleScreenshotScanComplete = (result: ScreenshotScanResult) => {
     setScreenshotResults(result)
     setScreenshotAppState('results')
+  }
+
+  const handleLargeFileScanComplete = (result: LargeFileScanResult) => {
+    setLargeFileResults(result)
+    setLargeFileAppState('results')
   }
 
   return (
@@ -249,6 +262,65 @@ function AppContent() {
                 >
                   <ScreenshotsView
                     results={screenshotResults}
+                    onNewScan={handleNewScan}
+                  />
+                </motion.div>
+              )}
+            </>
+          )}
+
+          {/* Large Files Module */}
+          {activeModule === 'large' && (
+            <>
+              {largeFileAppState === 'idle' && (
+                <motion.div
+                  key="large-idle"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <LargeFileScanView
+                    onScanStart={() => setLargeFileAppState('scanning')}
+                    onScanComplete={handleLargeFileScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setLargeFileProgress}
+                  />
+                </motion.div>
+              )}
+
+              {largeFileAppState === 'scanning' && (
+                <motion.div
+                  key="large-scanning"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <LargeFileScanView
+                    isScanning
+                    progress={largeFileProgress}
+                    onScanStart={() => {}}
+                    onScanComplete={handleLargeFileScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setLargeFileProgress}
+                  />
+                </motion.div>
+              )}
+
+              {largeFileAppState === 'results' && largeFileResults && (
+                <motion.div
+                  key="large-results"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.5, ease: "circOut" }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <LargeFilesView
+                    results={largeFileResults}
                     onNewScan={handleNewScan}
                   />
                 </motion.div>
