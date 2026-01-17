@@ -11,7 +11,7 @@ import {
   Activity,
   ChevronRight,
   Command,
-  LayoutGrid,
+  FolderSearch,
   History,
   ShieldCheck,
   Database,
@@ -39,7 +39,7 @@ const formatBytes = (bytes: number): string => {
 
 // Type guard to check if an item id is a valid ActiveModule
 const isActiveModule = (id: string): id is ActiveModule => {
-  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize'
+  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize' || id === 'unorganized'
 }
 
 export function Sidebar({
@@ -73,7 +73,7 @@ export function Sidebar({
         { id: 'large', name: 'Large Files', hint: 'Space hogs', icon: HardDrive, available: true },
         { id: 'screenshots', name: 'Screenshots', hint: 'UI captures', icon: Smartphone, available: true },
         { id: 'organize', name: 'Organize', hint: 'Sort by date', icon: FolderTree, available: true },
-        { id: 'unorganized', name: 'Unorganized', hint: 'Loose files', icon: LayoutGrid, available: false }
+        { id: 'unorganized', name: 'Unorganized', hint: 'Loose files', icon: FolderSearch, available: true }
       ]
     }
   ]

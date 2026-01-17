@@ -104,7 +104,7 @@ export interface LargeFileScanResult {
 }
 
 // Module routing
-export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize'
+export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized'
 
 // Organization types
 export type FolderStructure = 'year_month' | 'year_month_day' | 'year_month_flat'
@@ -156,4 +156,45 @@ export interface OrganizeProgress {
   current: number
   total: number
   current_file: string
+}
+
+// Unorganized file types
+export type UnorganizedReason = 'in_root' | 'shallow_folder' | 'no_date_pattern' | 'generic_name'
+
+export interface UnorganizedFile {
+  path: string
+  filename: string
+  size_bytes: number
+  file_type: string
+  reasons: UnorganizedReason[]
+  folder_depth: number
+  parent_folder: string
+}
+
+export interface UnorganizedConfig {
+  source_paths: string[]
+  check_root: boolean
+  check_date_pattern: boolean
+  check_generic_names: boolean
+  min_depth: number
+}
+
+export interface ReasonSummary {
+  reason: UnorganizedReason
+  count: number
+  size_bytes: number
+}
+
+export interface UnorganizedResult {
+  files: UnorganizedFile[]
+  total_files: number
+  total_size_bytes: number
+  by_reason: ReasonSummary[]
+  duration_ms: number
+}
+
+export interface UnorganizedProgress {
+  phase: string
+  files_scanned: number
+  message: string
 }

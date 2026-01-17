@@ -31,6 +31,7 @@ pub fn run() {
             commands::show_in_folder,
             commands::create_organize_plan,
             commands::execute_organize_plan,
+            commands::scan_unorganized,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

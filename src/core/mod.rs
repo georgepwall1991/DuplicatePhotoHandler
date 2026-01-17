@@ -15,6 +15,7 @@
 //! - `screenshot` - Detects screenshots using multiple methods
 //! - `large_files` - Finds large files for disk space cleanup
 //! - `organize` - Organizes photos into date-based folder structures
+//! - `unorganized` - Finds loose/unorganized files
 
 pub mod cache;
 pub mod comparator;
@@ -27,6 +28,7 @@ pub mod quality;
 pub mod reporter;
 pub mod scanner;
 pub mod screenshot;
+pub mod unorganized;
 pub mod watcher;
 
 // Re-export commonly used types
@@ -38,3 +40,4 @@ pub use quality::QualityScore;
 pub use reporter::{DuplicateExplanation, GroupReport};
 pub use scanner::PhotoFile;
 pub use screenshot::{ScreenshotConfidence, ScreenshotInfo};
+pub use unorganized::{UnorganizedConfig, UnorganizedFile, UnorganizedReason, UnorganizedResult, UnorganizedScanner};

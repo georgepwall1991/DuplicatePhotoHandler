@@ -7,6 +7,9 @@ use duplicate_photo_cleaner::core::large_files::{LargeFileScanner, LargeFileScan
 use duplicate_photo_cleaner::core::organize::{
     OperationMode, OrganizeConfig, OrganizeExecutor, OrganizePlan, OrganizePlanner, OrganizeResult,
 };
+use duplicate_photo_cleaner::core::unorganized::{
+    UnorganizedConfig, UnorganizedResult, UnorganizedScanner,
+};
 use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
 use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
 use duplicate_photo_cleaner::core::watcher::{FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent};
@@ -1073,6 +1076,90 @@ pub async fn execute_organize_plan(
     if let Ok(mut stored) = state.organize_plan.lock() {
         *stored = None;
     }
+
+    Ok(result)
+}
+
+/// Progress event for unorganized file scan
+#[derive(Clone, Serialize)]
+pub struct UnorganizedProgress {
+    pub phase: String,
+    pub files_scanned: usize,
+    pub message: String,
+}
+
+/// Scan for unorganized/loose media files
+#[tauri::command]
+pub async fn scan_unorganized(
+    app: AppHandle,
+    config: UnorganizedConfig,
+    state: State<'_, AppState>,
+) -> Result<UnorganizedResult, String> {
+    // Check if already scanning
+    {
+        let mut scanning = state.scanning.lock().map_err(|e| e.to_string())?;
+        if *scanning {
+            return Err("A scan is already in progress".to_string());
+        }
+        *scanning = true;
+    }
+
+    // Helper to reset scanning state on any exit path
+    let reset_scanning = || {
+        if let Ok(mut scanning) = state.scanning.lock() {
+            *scanning = false;
+        }
+    };
+
+    // Emit initial progress
+    let _ = app.emit(
+        "unorganized-scan-event",
+        UnorganizedProgress {
+            phase: "Scanning".to_string(),
+            files_scanned: 0,
+            message: "Starting scan...".to_string(),
+        },
+    );
+
+    // Run scan with progress callback
+    let app_handle = app.clone();
+    let result = match tokio::task::spawn_blocking(move || {
+        UnorganizedScanner::scan(&config, |count, message| {
+            let _ = app_handle.emit(
+                "unorganized-scan-event",
+                UnorganizedProgress {
+                    phase: "Scanning".to_string(),
+                    files_scanned: count,
+                    message: message.to_string(),
+                },
+            );
+        })
+    })
+    .await
+    {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            reset_scanning();
+            return Err(e);
+        }
+        Err(e) => {
+            reset_scanning();
+            return Err(format!("Scan task panicked: {}", e));
+        }
+    };
+
+    // Emit completion event
+    let _ = app.emit(
+        "unorganized-scan-event",
+        UnorganizedProgress {
+            phase: "Complete".to_string(),
+            files_scanned: result.total_files,
+            message: format!("Found {} unorganized files", result.total_files),
+        },
+    );
+
+    // Reset scanning state
+    reset_scanning();
 
     Ok(result)
 }
