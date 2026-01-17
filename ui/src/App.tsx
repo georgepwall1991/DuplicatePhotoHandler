@@ -10,7 +10,7 @@ import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
 
 export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
-import type { AppState, ScanResult, WatcherEvent } from './lib/types'
+import type { AppState, ScanResult, WatcherEvent, ActiveModule } from './lib/types'
 
 function AppContent() {
   const [appState, setAppState] = useState<AppState>('idle')
@@ -20,6 +20,7 @@ function AppContent() {
   const [watchedPaths, setWatchedPaths] = useState<string[]>([])
   const [scannedPaths, setScannedPaths] = useState<string[]>([])
   const [showSettings, setShowSettings] = useState(false)
+  const [activeModule, setActiveModule] = useState<ActiveModule>('duplicates')
   const { showToast } = useToast()
   const watcherUnlistenRef = useRef<(() => void) | null>(null)
 
@@ -108,7 +109,8 @@ function AppContent() {
       />
 
       <Sidebar
-        activeModule="duplicates"
+        activeModule={activeModule}
+        onModuleChange={setActiveModule}
         onNewScan={handleNewScan}
         potentialSavings={results?.potential_savings_bytes}
         isWatching={isWatching}
@@ -126,7 +128,7 @@ function AppContent() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-              className="flex-1 glass-strong rounded-[2.5rem] overflow-hidden shadow-2xl"
+              className="flex-1 glass-strong  overflow-hidden shadow-2xl"
             >
               <ScanView
                 onScanStart={() => setAppState('scanning')}
@@ -145,7 +147,7 @@ function AppContent() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
-              className="flex-1 glass-strong rounded-[2.5rem] overflow-hidden shadow-2xl"
+              className="flex-1 glass-strong  overflow-hidden shadow-2xl"
             >
               <ScanView
                 isScanning
@@ -166,7 +168,7 @@ function AppContent() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.5, ease: "circOut" }}
-              className="flex-1 glass-strong rounded-[2.5rem] overflow-hidden shadow-2xl"
+              className="flex-1 glass-strong  overflow-hidden shadow-2xl"
             >
               <ResultsView
                 results={results}

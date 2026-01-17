@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import type { ActiveModule } from '../lib/types'
 import {
   Images,
   Layers,
@@ -17,7 +18,8 @@ import {
 } from 'lucide-react'
 
 interface SidebarProps {
-  activeModule: string
+  activeModule: ActiveModule
+  onModuleChange: (module: ActiveModule) => void
   onNewScan: () => void
   potentialSavings?: number
   isWatching?: boolean
@@ -36,6 +38,7 @@ const formatBytes = (bytes: number): string => {
 
 export function Sidebar({
   activeModule,
+  onModuleChange,
   onNewScan,
   potentialSavings,
   isWatching,
@@ -62,7 +65,7 @@ export function Sidebar({
       label: 'Analysis',
       items: [
         { id: 'large', name: 'Large Files', hint: 'Space hogs', icon: HardDrive, available: false },
-        { id: 'screenshots', name: 'Screenshots', hint: 'UI captures', icon: Smartphone, available: false },
+        { id: 'screenshots', name: 'Screenshots', hint: 'UI captures', icon: Smartphone, available: true },
         { id: 'unorganized', name: 'Unorganized', hint: 'Loose files', icon: LayoutGrid, available: false }
       ]
     }
@@ -71,21 +74,21 @@ export function Sidebar({
   return (
     <aside className="w-[340px] shrink-0 ml-10">
       <div className="h-full p-5">
-        <div className="relative h-full rounded-[2.4rem] bg-gradient-to-b from-white/15 via-white/5 to-white/10 p-[1px] shadow-[0_40px_120px_rgba(0,0,0,0.65)]">
-          <div className="relative flex h-full flex-col overflow-hidden rounded-[2.35rem] bg-[#07070c]/90 backdrop-blur-2xl">
+        <div className="relative h-full bg-gradient-to-b from-white/15 via-white/5 to-white/10 p-[1px] shadow-[0_40px_120px_rgba(0,0,0,0.65)]">
+          <div className="relative flex h-full flex-col overflow-hidden bg-[#07070c]/90 backdrop-blur-2xl">
             <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute -top-24 -right-20 h-64 w-64 rounded-full bg-cyan-500/20 blur-3xl" />
-              <div className="absolute bottom-[-120px] left-[-80px] h-72 w-72 rounded-full bg-fuchsia-500/15 blur-3xl" />
+              <div className="absolute -top-24 -right-20 h-64 w-64 bg-cyan-500/20 blur-3xl" />
+              <div className="absolute bottom-[-120px] left-[-80px] h-72 w-72 bg-fuchsia-500/15 blur-3xl" />
               <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0)_35%,rgba(255,255,255,0.05)_100%)]" />
             </div>
 
-            <div className="relative z-10 flex h-full flex-col">
-            <div className="px-7 pt-12 pb-6">
+            <div className="relative z-10 flex h-full flex-col m-6">
+            <div className="px-4 pt-8 pb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <div className="absolute -inset-1 rounded-2xl bg-cyan-400/30 blur-md" />
-                    <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-500 shadow-[0_8px_30px_rgba(56,189,248,0.4)]">
+                    <div className="absolute -inset-1 bg-cyan-400/30 blur-md" />
+                    <div className="relative flex h-12 w-12 items-center justify-center bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-500 shadow-[0_8px_30px_rgba(56,189,248,0.4)]">
                       <Zap className="h-5 w-5 text-slate-900" />
                     </div>
                   </div>
@@ -96,23 +99,23 @@ export function Sidebar({
                   </div>
                 </div>
                 <div
-                  className={`flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
+                  className={`flex items-center gap-2 border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${
                     guardEnabled ? 'border-emerald-400/30 text-emerald-300' : 'border-white/10 text-slate-400'
                   }`}
                 >
-                  <span className={`h-1.5 w-1.5 rounded-full ${guardEnabled ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                  <span className={`h-1.5 w-1.5 ${guardEnabled ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                   {guardEnabled ? 'Live' : 'Idle'}
                 </div>
               </div>
             </div>
 
-            <div className="px-7">
+            <div className="px-4">
               <motion.button
                 type="button"
                 onClick={onNewScan}
                 whileHover={{ y: -1 }}
                 whileTap={{ scale: 0.98 }}
-                className="group relative w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition"
+                className="group relative w-full overflow-hidden border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/35 via-blue-500/25 to-indigo-500/15 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                 <div className="relative flex items-center justify-between gap-3">
@@ -128,20 +131,20 @@ export function Sidebar({
               </motion.button>
             </div>
 
-            <div className="mt-5 px-7">
+            <div className="mt-4 px-4">
               <button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-xs font-medium text-slate-400 transition hover:border-white/20 hover:text-white"
+                className="flex w-full items-center gap-3 border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-xs font-medium text-slate-400 transition hover:border-white/20 hover:text-white"
               >
                 <Search className="h-4 w-4 text-slate-400" />
                 <span className="flex-1">Search or command</span>
-                <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px] font-semibold tracking-[0.24em] text-slate-500">
+                <span className="flex items-center gap-1 border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[9px] font-semibold tracking-[0.24em] text-slate-500">
                   <Command className="h-3 w-3" /> K
                 </span>
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 space-y-6 overflow-y-auto px-4 pb-6 pt-6 custom-scrollbar">
+            <div className="flex-1 min-h-0 space-y-5 overflow-y-auto px-2 pb-4 pt-4 custom-scrollbar">
               {groups.map((group) => (
                 <div key={group.label} className="space-y-3">
                   <div className="px-3 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-500">
@@ -156,9 +159,9 @@ export function Sidebar({
                         <button
                           key={item.id}
                           type="button"
-                          onClick={item.available ? onNewScan : undefined}
+                          onClick={item.available ? () => onModuleChange(item.id as ActiveModule) : undefined}
                           disabled={!item.available}
-                          className={`group relative w-full overflow-hidden rounded-2xl px-3 py-3 text-left transition ${
+                          className={`group relative w-full overflow-hidden px-3 py-3 text-left transition ${
                             isActive
                               ? 'text-white'
                               : item.available
@@ -169,12 +172,12 @@ export function Sidebar({
                           {isActive && (
                             <motion.div
                               layoutId="nav-active"
-                              className="pointer-events-none absolute inset-0 rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-500/20 via-slate-900/30 to-transparent shadow-[0_10px_30px_rgba(56,189,248,0.15)]"
+                              className="pointer-events-none absolute inset-0 border border-cyan-400/20 bg-gradient-to-r from-cyan-500/20 via-slate-900/30 to-transparent shadow-[0_10px_30px_rgba(56,189,248,0.15)]"
                             />
                           )}
                           <div className="relative z-10 flex items-center gap-3">
                             <div
-                              className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
+                              className={`flex h-10 w-10 items-center justify-center border ${
                                 isActive
                                   ? 'border-cyan-400/30 bg-cyan-500/15 text-cyan-200'
                                   : item.available
@@ -197,7 +200,7 @@ export function Sidebar({
                                 }`}
                               />
                             ) : (
-                              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              <span className="border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                                 Soon
                               </span>
                             )}
@@ -210,8 +213,8 @@ export function Sidebar({
               ))}
             </div>
 
-            <div className="mt-auto space-y-4 px-7 pb-12">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            <div className="mt-auto space-y-3 px-4 pb-6">
+              <div className="border border-white/10 bg-white/[0.04] p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-slate-500">
                     <Activity className={`h-3 w-3 ${guardEnabled ? 'text-emerald-400' : 'text-slate-500'}`} />
@@ -220,20 +223,20 @@ export function Sidebar({
                   <button
                     type="button"
                     onClick={onToggleWatch}
-                    className={`relative h-6 w-11 rounded-full border transition ${
+                    className={`relative h-6 w-11 border transition ${
                       guardEnabled ? 'border-emerald-400/40 bg-emerald-500/40' : 'border-white/10 bg-white/5'
                     }`}
                   >
                     <motion.span
                       animate={{ x: guardEnabled ? 20 : 0 }}
                       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                      className="absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-lg"
+                      className="absolute left-1 top-1 h-4 w-4 bg-white shadow-lg"
                     />
                   </button>
                 </div>
                 <div className="mt-4 flex items-center gap-3">
                   <div
-                    className={`relative flex h-11 w-11 items-center justify-center rounded-2xl border ${
+                    className={`relative flex h-11 w-11 items-center justify-center border ${
                       guardEnabled
                         ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
                         : 'border-white/10 bg-white/5 text-slate-500'
@@ -241,7 +244,7 @@ export function Sidebar({
                   >
                     {guardEnabled && (
                       <motion.span
-                        className="absolute inset-0 rounded-2xl border border-emerald-400/40"
+                        className="absolute inset-0 border border-emerald-400/40"
                         animate={{ opacity: [0.8, 0, 0.8], scale: [1, 1.2, 1] }}
                         transition={{ duration: 2.4, repeat: Infinity }}
                       />
@@ -256,7 +259,7 @@ export function Sidebar({
               </div>
 
               {potentialSavings !== undefined && potentialSavings > 0 && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <div className="border border-white/10 bg-white/[0.04] p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.32em] text-emerald-300">
                       <Database className="h-3 w-3" />
@@ -264,11 +267,11 @@ export function Sidebar({
                     </div>
                     <span className="text-sm font-semibold text-white">{formatBytes(potentialSavings)}</span>
                   </div>
-                  <div className="mt-3 h-2 w-full rounded-full bg-white/10">
+                  <div className="mt-3 h-2 w-full bg-white/10">
                     <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: '68%' }}
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 via-cyan-300 to-sky-400"
+                      className="h-full bg-gradient-to-r from-emerald-400 via-cyan-300 to-sky-400"
                     />
                   </div>
                   <p className="mt-2 text-[10px] text-slate-500">Estimated reclaimable space</p>
@@ -278,11 +281,11 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={onOpenSettings}
-                className="group flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/5"
+                className="group flex w-full items-center gap-3 border border-white/10 bg-white/[0.04] px-3 py-3 text-left transition hover:border-white/20 hover:bg-white/5"
               >
-                <div className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-slate-700 to-slate-900">
+                <div className="relative flex h-10 w-10 items-center justify-center border border-white/10 bg-gradient-to-br from-slate-700 to-slate-900">
                   <span className="text-xs font-semibold text-cyan-200">GW</span>
-                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#07070c] bg-emerald-400" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 border-2 border-[#07070c] bg-emerald-400" />
                 </div>
                 <div className="flex-1 text-left">
                   <p className="text-sm font-semibold text-white truncate">George Wall</p>
