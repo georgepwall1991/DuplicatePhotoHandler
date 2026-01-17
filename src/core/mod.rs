@@ -14,12 +14,14 @@
 //! - `watcher` - Monitors folders for file changes
 //! - `screenshot` - Detects screenshots using multiple methods
 //! - `large_files` - Finds large files for disk space cleanup
+//! - `organize` - Organizes photos into date-based folder structures
 
 pub mod cache;
 pub mod comparator;
 pub mod hasher;
 pub mod large_files;
 pub mod metadata;
+pub mod organize;
 pub mod pipeline;
 pub mod quality;
 pub mod reporter;
