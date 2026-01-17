@@ -569,6 +569,48 @@ pub struct CacheInfoDto {
     pub path: String,
 }
 
+/// Screenshot confidence level for frontend
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ScreenshotConfidenceDto {
+    High,
+    Medium,
+    Low,
+}
+
+impl From<duplicate_photo_cleaner::core::screenshot::ScreenshotConfidence> for ScreenshotConfidenceDto {
+    fn from(c: duplicate_photo_cleaner::core::screenshot::ScreenshotConfidence) -> Self {
+        use duplicate_photo_cleaner::core::screenshot::ScreenshotConfidence;
+        match c {
+            ScreenshotConfidence::High => Self::High,
+            ScreenshotConfidence::Medium => Self::Medium,
+            ScreenshotConfidence::Low => Self::Low,
+        }
+    }
+}
+
+/// Screenshot info for frontend
+#[derive(Debug, Serialize)]
+pub struct ScreenshotInfoDto {
+    pub path: String,
+    pub size_bytes: u64,
+    pub width: u32,
+    pub height: u32,
+    pub date_taken: Option<String>,
+    pub confidence: ScreenshotConfidenceDto,
+    pub detection_reason: String,
+    pub source_app: Option<String>,
+}
+
+/// Screenshot scan results for frontend
+#[derive(Debug, Serialize)]
+pub struct ScreenshotScanResultDto {
+    pub all_screenshots: Vec<ScreenshotInfoDto>,
+    pub duplicate_groups: Vec<DuplicateGroupDto>,
+    pub total_size_bytes: u64,
+    pub scan_duration_ms: u64,
+}
+
 /// Get the cache database path
 fn get_cache_path(app: &AppHandle) -> Result<PathBuf, String> {
     let app_data_dir = app
@@ -620,4 +662,147 @@ pub fn clear_cache(app: AppHandle) -> Result<bool, String> {
     cache.clear().map_err(|e| e.to_string())?;
 
     Ok(true)
+}
+
+/// Scan for screenshots and duplicates among them
+#[tauri::command]
+pub async fn scan_screenshots(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    config: ScanConfig,
+) -> Result<ScreenshotScanResultDto, String> {
+    use duplicate_photo_cleaner::core::metadata::extract_metadata;
+    use duplicate_photo_cleaner::core::scanner::WalkDirScanner;
+    use duplicate_photo_cleaner::core::scanner::PhotoScanner;
+    use duplicate_photo_cleaner::core::screenshot::is_screenshot;
+    use std::time::Instant;
+
+    // Check if already scanning
+    {
+        let mut scanning = state.scanning.lock().map_err(|e| e.to_string())?;
+        if *scanning {
+            return Err("A scan is already in progress".to_string());
+        }
+        *scanning = true;
+    }
+
+    // Reset cancellation flag
+    state.cancelled.store(false, Ordering::SeqCst);
+    let cancelled = state.cancelled.clone();
+
+    let start_time = Instant::now();
+
+    // Parse algorithm
+    let algorithm = match config.algorithm.as_deref() {
+        Some("average") => HashAlgorithmKind::Average,
+        Some("perceptual") => HashAlgorithmKind::Perceptual,
+        Some("fusion") => HashAlgorithmKind::Fusion,
+        _ => HashAlgorithmKind::Difference,
+    };
+
+    // Build paths
+    let paths: Vec<PathBuf> = config.paths.iter().map(PathBuf::from).collect();
+
+    // Scan for all photos first
+    let scanner = WalkDirScanner::new(duplicate_photo_cleaner::core::scanner::ScanConfig::default());
+    let scan_result = scanner.scan(&paths).map_err(|e| e.to_string())?;
+
+    let app_handle = app.clone();
+    let (sender, receiver) = crossbeam_channel::unbounded::<Event>();
+
+    // Spawn event forwarder
+    let forward_handle = app_handle.clone();
+    let cancelled_check = cancelled.clone();
+    std::thread::spawn(move || {
+        while let Ok(event) = receiver.recv() {
+            if cancelled_check.load(Ordering::SeqCst) {
+                let _ = forward_handle.emit("screenshot-scan-event", &Event::Pipeline(PipelineEvent::Cancelled));
+                break;
+            }
+            let _ = forward_handle.emit("screenshot-scan-event", &event);
+        }
+    });
+
+    let event_sender = EventSender::new(sender);
+
+    // Filter photos to find screenshots
+    let mut screenshots = Vec::new();
+    let mut screenshot_paths = Vec::new();
+    let mut total_size_bytes: u64 = 0;
+
+    for photo in &scan_result.photos {
+        if cancelled.load(Ordering::SeqCst) {
+            break;
+        }
+
+        let metadata = extract_metadata(&photo.path);
+        if let Some(screenshot_info) = is_screenshot(&photo.path, &metadata, photo.size) {
+            // Convert width/height from Option to u32 with defaults
+            let width = metadata.width.unwrap_or(0);
+            let height = metadata.height.unwrap_or(0);
+
+            let dto = ScreenshotInfoDto {
+                path: screenshot_info.path.clone(),
+                size_bytes: screenshot_info.size_bytes,
+                width,
+                height,
+                date_taken: screenshot_info.date_taken,
+                confidence: screenshot_info.confidence.into(),
+                detection_reason: screenshot_info.detection_reason,
+                source_app: screenshot_info.source_app,
+            };
+
+            total_size_bytes += screenshot_info.size_bytes;
+            screenshot_paths.push(photo.path.clone());
+            screenshots.push(dto);
+        }
+    }
+
+    // Emit scan complete event
+    event_sender.send(Event::Pipeline(PipelineEvent::Completed {
+        summary: duplicate_photo_cleaner::events::PipelineSummary {
+            total_photos: screenshots.len(),
+            duplicate_groups: 0,
+            duplicate_count: 0,
+            potential_savings_bytes: 0,
+            duration_ms: 0,
+        },
+    }));
+
+    // Run duplicate detection on screenshots only if we found any
+    let duplicate_groups = if !screenshot_paths.is_empty() && !cancelled.load(Ordering::SeqCst) {
+        let pipeline = Pipeline::builder()
+            .paths(screenshot_paths.clone())
+            .algorithm(algorithm)
+            .threshold(config.threshold)
+            .build();
+
+        let cancel_token: CancellationToken = cancelled.clone();
+        match tokio::task::spawn_blocking(move || {
+            pipeline.run_with_cancellation(&event_sender, cancel_token)
+        })
+        .await
+        {
+            Ok(Ok(result)) => result.groups.iter().map(DuplicateGroupDto::from).collect(),
+            _ => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+
+    // ALWAYS reset scanning state
+    {
+        if let Ok(mut scanning) = state.scanning.lock() {
+            *scanning = false;
+        }
+    }
+
+    let scan_duration_ms = start_time.elapsed().as_millis() as u64;
+
+    Ok(ScreenshotScanResultDto {
+        all_screenshots: screenshots,
+        duplicate_groups,
+        total_size_bytes,
+        scan_duration_ms,
+    })
 }

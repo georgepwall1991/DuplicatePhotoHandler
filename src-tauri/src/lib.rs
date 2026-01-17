@@ -26,6 +26,7 @@ pub fn run() {
             commands::export_results_html,
             commands::get_cache_info,
             commands::clear_cache,
+            commands::scan_screenshots,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
