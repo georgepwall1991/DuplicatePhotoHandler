@@ -5,16 +5,18 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Sidebar } from './components/Sidebar'
 import { ScanView } from './components/ScanView'
 import { ResultsView } from './components/ResultsView'
+import { ScreenshotsView } from './components/ScreenshotsView'
 import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
 
 export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
-import type { AppState, ScanResult, WatcherEvent, ActiveModule } from './lib/types'
+import type { AppState, ScanResult, WatcherEvent, ActiveModule, ScreenshotScanResult } from './lib/types'
 
 function AppContent() {
   const [appState, setAppState] = useState<AppState>('idle')
   const [results, setResults] = useState<ScanResult | null>(null)
+  const [screenshotResults, setScreenshotResults] = useState<ScreenshotScanResult | null>(null)
   const [progress, setProgress] = useState({ phase: '', percent: 0, message: '' })
   const [isWatching, setIsWatching] = useState(false)
   const [watchedPaths, setWatchedPaths] = useState<string[]>([])
@@ -80,8 +82,12 @@ function AppContent() {
   }
 
   const handleNewScan = () => {
-    setResults(null)
-    setAppState('idle')
+    if (activeModule === 'screenshots') {
+      setScreenshotResults(null)
+    } else {
+      setResults(null)
+      setAppState('idle')
+    }
   }
 
   return (
@@ -121,57 +127,79 @@ function AppContent() {
 
       <main className="flex-1 relative z-10 flex flex-col overflow-hidden">
         <AnimatePresence mode="wait">
-          {appState === 'idle' && (
-            <motion.div
-              key="idle"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-              className="flex-1 glass-strong  overflow-hidden shadow-2xl"
-            >
-              <ScanView
-                onScanStart={() => setAppState('scanning')}
-                onScanComplete={handleScanComplete}
-                onScanCancel={handleNewScan}
-                onProgress={setProgress}
-                onPathsSelected={setScannedPaths}
-              />
-            </motion.div>
+          {/* Duplicates Module */}
+          {activeModule === 'duplicates' && (
+            <>
+              {appState === 'idle' && (
+                <motion.div
+                  key="idle"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                  className="flex-1 glass-strong  overflow-hidden shadow-2xl"
+                >
+                  <ScanView
+                    onScanStart={() => setAppState('scanning')}
+                    onScanComplete={handleScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setProgress}
+                    onPathsSelected={setScannedPaths}
+                  />
+                </motion.div>
+              )}
+
+              {appState === 'scanning' && (
+                <motion.div
+                  key="scanning"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="flex-1 glass-strong  overflow-hidden shadow-2xl"
+                >
+                  <ScanView
+                    isScanning
+                    progress={progress}
+                    onScanStart={() => { }}
+                    onScanComplete={handleScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setProgress}
+                    onPathsSelected={setScannedPaths}
+                  />
+                </motion.div>
+              )}
+
+              {appState === 'results' && results && (
+                <motion.div
+                  key="results"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.5, ease: "circOut" }}
+                  className="flex-1 glass-strong  overflow-hidden shadow-2xl"
+                >
+                  <ResultsView
+                    results={results}
+                    onNewScan={handleNewScan}
+                  />
+                </motion.div>
+              )}
+            </>
           )}
 
-          {appState === 'scanning' && (
+          {/* Screenshots Module */}
+          {activeModule === 'screenshots' && (
             <motion.div
-              key="scanning"
-              initial={{ opacity: 0, scale: 1.05 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-              className="flex-1 glass-strong  overflow-hidden shadow-2xl"
-            >
-              <ScanView
-                isScanning
-                progress={progress}
-                onScanStart={() => { }}
-                onScanComplete={handleScanComplete}
-                onScanCancel={handleNewScan}
-                onProgress={setProgress}
-                onPathsSelected={setScannedPaths}
-              />
-            </motion.div>
-          )}
-
-          {appState === 'results' && results && (
-            <motion.div
-              key="results"
+              key="screenshots"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.5, ease: "circOut" }}
-              className="flex-1 glass-strong  overflow-hidden shadow-2xl"
+              className="flex-1 glass-strong overflow-hidden shadow-2xl"
             >
-              <ResultsView
-                results={results}
+              <ScreenshotsView
+                results={screenshotResults}
                 onNewScan={handleNewScan}
               />
             </motion.div>
