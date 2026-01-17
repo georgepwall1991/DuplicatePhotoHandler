@@ -5,8 +5,9 @@
 //! ## Extracted Fields
 //! - Date taken (DateTimeOriginal)
 //! - Image dimensions (width x height)
-//! - Camera model
+//! - Camera make and model
 //! - Orientation
+//! - Software (e.g., "screencaptureui")
 //!
 //! ## Supported Formats
 //! EXIF metadata is typically found in JPEG and TIFF files.
@@ -34,6 +35,8 @@ pub struct PhotoMetadata {
     pub camera_model: Option<String>,
     /// Image orientation (1-8, where 1 is normal)
     pub orientation: Option<u16>,
+    /// Software used to create the image (e.g., "screencaptureui")
+    pub software: Option<String>,
 }
 
 impl PhotoMetadata {
@@ -44,6 +47,8 @@ impl PhotoMetadata {
             || self.height.is_some()
             || self.camera_make.is_some()
             || self.camera_model.is_some()
+            || self.orientation.is_some()
+            || self.software.is_some()
     }
 
     /// Get a display string for the camera
@@ -147,6 +152,11 @@ pub fn extract_metadata(path: &Path) -> PhotoMetadata {
         }
     }
 
+    // Extract software
+    if let Some(field) = exif_reader.get_field(Tag::Software, In::PRIMARY) {
+        metadata.software = get_string_value(&field.value);
+    }
+
     metadata
 }
 
@@ -231,5 +241,12 @@ mod tests {
     fn extract_from_nonexistent_returns_default() {
         let meta = extract_metadata(Path::new("/nonexistent/file.jpg"));
         assert!(!meta.has_data());
+    }
+
+    #[test]
+    fn metadata_with_software_has_data() {
+        let mut meta = PhotoMetadata::default();
+        meta.software = Some("screencaptureui".to_string());
+        assert!(meta.has_data());
     }
 }
