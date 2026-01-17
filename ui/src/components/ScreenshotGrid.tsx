@@ -6,8 +6,6 @@ interface ScreenshotGridProps {
   screenshots: ScreenshotInfo[]
   selectedPaths: Set<string>
   onToggleSelect: (path: string) => void
-  onSelectAll: () => void
-  onDeselectAll: () => void
   onPreview: (screenshot: ScreenshotInfo) => void
 }
 
