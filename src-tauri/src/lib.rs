@@ -28,6 +28,7 @@ pub fn run() {
             commands::clear_cache,
             commands::scan_screenshots,
             commands::scan_large_files,
+            commands::show_in_folder,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

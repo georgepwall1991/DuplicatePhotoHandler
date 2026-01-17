@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { File, Film, Image, Check, Eye } from 'lucide-react'
-import { convertFileSrc } from '../lib/tauri'
+import { useState, useEffect, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { File, Film, Image, Check, Eye, FolderOpen } from 'lucide-react'
+import { convertFileSrc, invoke } from '../lib/tauri'
 import type { LargeFileInfo } from '../lib/types'
 
 interface LargeFileCardProps {
@@ -76,6 +76,7 @@ function ImageThumbnail({
 export function LargeFileCard({ file, isSelected, onToggleSelect, onPreview }: LargeFileCardProps) {
   const isImage = isImageType(file.file_type)
   const isVideo = isVideoType(file.file_type)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
 
   const handleClick = () => {
     if (onPreview && isImage) {
@@ -85,7 +86,40 @@ export function LargeFileCard({ file, isSelected, onToggleSelect, onPreview }: L
     }
   }
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setContextMenu({ x: e.clientX, y: e.clientY })
+  }, [])
+
+  const handleShowInFolder = useCallback(async () => {
+    setContextMenu(null)
+    try {
+      await invoke('show_in_folder', { path: file.path })
+    } catch (error) {
+      console.error('Failed to show in folder:', error)
+    }
+  }, [file.path])
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    if (!contextMenu) return
+
+    const handleClickOutside = () => setContextMenu(null)
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+
+    document.addEventListener('click', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [contextMenu])
+
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -96,6 +130,7 @@ export function LargeFileCard({ file, isSelected, onToggleSelect, onPreview }: L
           : 'border-white/10 hover:border-white/20 hover:bg-white/[0.04]'
       }`}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
     >
       {/* Thumbnail area */}
       <div className="relative aspect-square overflow-hidden">
@@ -172,5 +207,30 @@ export function LargeFileCard({ file, isSelected, onToggleSelect, onPreview }: L
         </p>
       </div>
     </motion.div>
+
+    {/* Context Menu */}
+    <AnimatePresence>
+      {contextMenu && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.1 }}
+          className="fixed z-50 min-w-[160px] border border-white/10 bg-slate-900/95 backdrop-blur-sm shadow-xl"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={handleShowInFolder}
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            <FolderOpen className="h-4 w-4" />
+            Show in Finder
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   )
 }
