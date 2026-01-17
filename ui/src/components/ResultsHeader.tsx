@@ -1,11 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
+import { 
+  Search, 
+  Download, 
+  Plus, 
+  Filter, 
+  CheckSquare, 
+  FileText, 
+  Table, 
+  ChevronDown,
+  AlertCircle,
+  Zap,
+  Layers
+} from 'lucide-react'
 import type { ScanResult, ExportResult } from '../lib/types'
 
-type SortOption = 'size' | 'photos' | 'type'
-type FilterOption = 'all' | 'exact' | 'near' | 'similar'
-type SelectionStrategy = 'duplicates' | 'keepHighestRes' | 'keepMostRecent' | 'keepOldest' | 'keepLargest' | 'keepSharpest'
+export type SortOption = 'size' | 'photos' | 'type'
+export type FilterOption = 'all' | 'exact' | 'near' | 'similar'
+export type SelectionStrategy = 'duplicates' | 'keepHighestRes' | 'keepMostRecent' | 'keepOldest' | 'keepLargest' | 'keepSharpest'
 
 interface ResultsHeaderProps {
   results: ScanResult
@@ -47,8 +61,8 @@ export function ResultsHeader({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
+  const [showAutoSelectMenu, setShowAutoSelectMenu] = useState(false)
 
-  // Export to CSV
   const handleExportCsv = async () => {
     try {
       setIsExporting(true)
@@ -57,21 +71,16 @@ export function ResultsHeader({
         filters: [{ name: 'CSV', extensions: ['csv'] }],
       })
       if (filePath) {
-        const result = await invoke<ExportResult>('export_results_csv', { path: filePath })
-        if (result.success) {
-          alert(`Exported ${result.groups_exported} groups to CSV`)
-        }
+        await invoke<ExportResult>('export_results_csv', { path: filePath })
       }
     } catch (error) {
       console.error('Export failed:', error)
-      alert('Export failed: ' + error)
     } finally {
       setIsExporting(false)
       setShowExportMenu(false)
     }
   }
 
-  // Export to HTML
   const handleExportHtml = async () => {
     try {
       setIsExporting(true)
@@ -80,24 +89,19 @@ export function ResultsHeader({
         filters: [{ name: 'HTML', extensions: ['html'] }],
       })
       if (filePath) {
-        const result = await invoke<ExportResult>('export_results_html', {
+        await invoke<ExportResult>('export_results_html', {
           path: filePath,
           title: 'Duplicate Photo Report'
         })
-        if (result.success) {
-          alert(`Exported ${result.groups_exported} groups to HTML report`)
-        }
       }
     } catch (error) {
       console.error('Export failed:', error)
-      alert('Export failed: ' + error)
     } finally {
       setIsExporting(false)
       setShowExportMenu(false)
     }
   }
 
-  // Keyboard shortcut: / to focus search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === '/' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
@@ -110,266 +114,211 @@ export function ResultsHeader({
   }, [])
 
   return (
-    <div className="p-6 border-b border-white/5 glass relative z-10">
-      <div className="flex items-center justify-between">
+    <div className="px-8 py-8 border-b border-white/5 relative z-30">
+      <div className="flex items-start justify-between mb-8">
         <div>
-          <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-            Scan Complete
-          </h2>
-          <p className="text-gray-400 mt-1">
-            Found <span className="text-purple-400 font-medium">{results.duplicate_groups}</span> groups with{' '}
-            <span className="text-purple-400 font-medium">{results.duplicate_count}</span> duplicates
-            <span className="mx-2 text-gray-600">·</span>
-            <span className="text-gray-500">{formatDuration(results.duration_ms)}</span>
-            {results.errors && results.errors.length > 0 && (
-              <>
-                <span className="mx-2 text-gray-600">·</span>
-                <button
-                  onClick={onToggleErrors}
-                  className="text-amber-400 hover:text-amber-300 transition-colors"
-                >
-                  {results.errors.length} warning{results.errors.length !== 1 ? 's' : ''}
-                </button>
-              </>
-            )}
+          <motion.div 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-3 mb-2"
+          >
+            <h2 className="text-3xl font-black text-white tracking-tighter">
+              Analysis Results
+            </h2>
+            <div className="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-black uppercase tracking-widest">
+              {formatDuration(results.duration_ms)}
+            </div>
+          </motion.div>
+          <p className="text-gray-500 font-medium">
+            Reviewing <span className="text-white">{results.total_photos.toLocaleString()}</span> assets across your library.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+
+        <div className="flex items-center gap-3">
           {hasSelection && (
-            <button
+            <motion.button
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
               onClick={onClearSelection}
-              className="px-5 py-2.5 glass-card rounded-xl text-gray-300 font-medium transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95"
+              className="px-5 py-3 rounded-2xl bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 text-xs font-bold uppercase tracking-widest transition-all"
             >
-              Clear Selection
-            </button>
+              Reset Selection
+            </motion.button>
           )}
-          <div className="relative group">
+
+          <div className="relative">
             <button
-              onClick={() => onAutoSelect('duplicates')}
-              className="px-6 py-2.5 bg-gradient-to-br from-purple-500 to-purple-700 hover:from-purple-400 hover:to-purple-600 text-white font-bold rounded-xl transition-all duration-300 hover:scale-105 active:scale-95 glow-purple shadow-lg shadow-purple-500/20 flex items-center gap-2"
+              onClick={() => setShowAutoSelectMenu(!showAutoSelectMenu)}
+              className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-3 shadow-lg shadow-purple-500/20"
             >
-              Auto-Select
-              <span className="text-purple-200 text-xs">▼</span>
+              <CheckSquare className="w-4 h-4" />
+              Smart Select
+              <ChevronDown className={`w-3 h-3 transition-transform ${showAutoSelectMenu ? 'rotate-180' : ''}`} />
             </button>
-            {/* Dropdown menu */}
-            <div className="absolute right-0 top-full mt-2 w-56 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-              <div className="glass-card rounded-xl p-2 shadow-xl border border-white/10">
-                <button
-                  onClick={() => onAutoSelect('duplicates')}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors"
+            
+            <AnimatePresence>
+              {showAutoSelectMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute right-0 top-full mt-3 w-64 glass-strong rounded-3xl p-3 shadow-2xl z-50 border border-white/10"
                 >
-                  <div className="font-medium">Select All Duplicates</div>
-                  <div className="text-xs text-gray-400">Keep the representative of each group</div>
-                </button>
-                <button
-                  onClick={() => onAutoSelect('keepHighestRes')}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <div className="font-medium">Keep Highest Resolution</div>
-                  <div className="text-xs text-gray-400">Select lower-res versions for deletion</div>
-                </button>
-                <button
-                  onClick={() => onAutoSelect('keepLargest')}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <div className="font-medium">Keep Largest File</div>
-                  <div className="text-xs text-gray-400">Select smaller files for deletion</div>
-                </button>
-                <button
-                  onClick={() => onAutoSelect('keepOldest')}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <div className="font-medium">Keep Oldest</div>
-                  <div className="text-xs text-gray-400">Preserve original, select newer copies</div>
-                </button>
-                <button
-                  onClick={() => onAutoSelect('keepMostRecent')}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <div className="font-medium">Keep Most Recent</div>
-                  <div className="text-xs text-gray-400">Select older versions for deletion</div>
-                </button>
-                <button
-                  onClick={() => onAutoSelect('keepSharpest')}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors"
-                >
-                  <div className="font-medium">Keep Sharpest</div>
-                  <div className="text-xs text-gray-400">Select blurrier versions for deletion</div>
-                </button>
-              </div>
-            </div>
+                  {[
+                    { id: 'duplicates', label: 'Recommended', sub: 'AI choice for each group' },
+                    { id: 'keepHighestRes', label: 'Highest Resolution', sub: 'Keep most detailed' },
+                    { id: 'keepLargest', label: 'Largest Size', sub: 'Keep heaviest files' },
+                    { id: 'keepSharpest', label: 'Maximum Sharpness', sub: 'Avoid motion blur' },
+                    { id: 'keepOldest', label: 'Chronological', sub: 'Keep original file' },
+                  ].map((strategy) => (
+                    <button
+                      key={strategy.id}
+                      onClick={() => {
+                        onAutoSelect(strategy.id as SelectionStrategy)
+                        setShowAutoSelectMenu(false)
+                      }}
+                      className="w-full p-3 text-left hover:bg-white/5 rounded-2xl transition-colors group"
+                    >
+                      <div className="text-[10px] font-black uppercase tracking-widest text-white mb-0.5 group-hover:text-purple-400">
+                        {strategy.label}
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-medium">{strategy.sub}</div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          {/* Export dropdown */}
+
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
               disabled={isExporting}
-              className="px-5 py-2.5 glass-card rounded-xl text-gray-300 font-medium transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 flex items-center gap-2"
+              className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-2xl transition-all"
             >
-              {isExporting ? (
-                <>
-                  <span className="animate-spin">⏳</span>
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  📤 Export
-                  <span className="text-gray-500 text-xs">▼</span>
-                </>
-              )}
+              <Download className="w-5 h-5" />
             </button>
-            {showExportMenu && !isExporting && (
-              <div className="absolute right-0 top-full mt-2 w-48 glass-card rounded-xl p-2 shadow-xl border border-white/10 z-50">
-                <button
-                  onClick={handleExportCsv}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors flex items-center gap-2"
+            
+            <AnimatePresence>
+              {showExportMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute right-0 top-full mt-3 w-48 glass-strong rounded-3xl p-2 shadow-2xl z-50 border border-white/10"
                 >
-                  <span>📊</span>
-                  <div>
-                    <div className="font-medium">Export CSV</div>
-                    <div className="text-xs text-gray-400">Spreadsheet format</div>
-                  </div>
-                </button>
-                <button
-                  onClick={handleExportHtml}
-                  className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <span>📄</span>
-                  <div>
-                    <div className="font-medium">Export HTML</div>
-                    <div className="text-xs text-gray-400">Visual report</div>
-                  </div>
-                </button>
-              </div>
-            )}
+                  <button
+                    onClick={handleExportCsv}
+                    className="w-full flex items-center gap-3 p-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 rounded-2xl transition-colors"
+                  >
+                    <Table className="w-4 h-4 text-green-400" />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={handleExportHtml}
+                    className="w-full flex items-center gap-3 p-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-white/5 rounded-2xl transition-colors"
+                  >
+                    <FileText className="w-4 h-4 text-blue-400" />
+                    Export HTML
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
+
           <button
             onClick={onNewScan}
-            className="px-5 py-2.5 glass-card rounded-xl text-gray-300 font-medium transition-all duration-200 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95"
+            className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-2xl transition-all"
           >
-            New Scan
+            <Plus className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* Errors/Warnings Panel */}
-      {showErrors && results.errors && results.errors.length > 0 && (
-        <div className="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-amber-400 font-medium">Warnings</h3>
-            <button
-              onClick={onToggleErrors}
-              className="text-gray-400 hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="max-h-40 overflow-y-auto space-y-1 text-sm">
-            {results.errors.map((error, idx) => (
-              <p key={idx} className="text-gray-300 truncate" title={error}>
-                {error}
-              </p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Sort, Search, and Filter controls */}
-      <div className="flex items-center gap-4 mt-6">
-        {/* Search */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-gray-500">Search:</span>
-          <div className="relative">
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Filter by filename... (/)"
-              className="w-48 px-3 py-1.5 rounded-lg text-sm bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-all"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => onSearchChange('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-              >
-                ×
-              </button>
-            )}
-          </div>
+      <div className="flex items-center gap-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search filenames..."
+            className="w-full pl-12 pr-4 py-4 rounded-[1.25rem] bg-white/5 border border-white/5 text-sm font-medium text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30 transition-all"
+          />
         </div>
 
-        <div className="w-px h-6 bg-white/10" />
-
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-gray-500">Sort:</span>
-          <div className="flex gap-1">
-            {[
-              { value: 'size', label: 'Size' },
-              { value: 'photos', label: 'Count' },
-              { value: 'type', label: 'Type' },
-            ].map(option => (
+        <div className="flex items-center gap-2 p-1.5 bg-white/5 rounded-[1.25rem] border border-white/5">
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'exact', label: 'Exact' },
+            { id: 'near', label: 'Near' },
+            { id: 'similar', label: 'Similar' },
+          ].map((option) => {
+            const active = filterBy === option.id
+            return (
               <button
-                key={option.value}
-                onClick={() => onSortChange(option.value as SortOption)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${sortBy === option.value
-                  ? 'glass-purple text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
+                key={option.id}
+                onClick={() => onFilterChange(option.id as FilterOption)}
+                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  active ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'text-gray-500 hover:text-white'
+                }`}
               >
                 {option.label}
               </button>
-            ))}
-          </div>
+            )
+          })}
         </div>
 
-        <div className="w-px h-6 bg-white/10" />
+        <div className="w-px h-8 bg-white/10" />
 
-        {/* Filter */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs uppercase tracking-wider text-gray-500">Filter:</span>
-          <div className="flex gap-1">
-            {[
-              { value: 'all', label: 'All' },
-              { value: 'exact', label: 'Exact' },
-              { value: 'near', label: 'Near' },
-              { value: 'similar', label: 'Similar' },
-            ].map(option => (
+        <div className="flex items-center gap-2 p-1.5 bg-white/5 rounded-[1.25rem] border border-white/5">
+          {[
+            { id: 'size', label: 'Size', icon: Zap },
+            { id: 'photos', label: 'Count', icon: Layers },
+            { id: 'type', label: 'Type', icon: Filter },
+          ].map((option) => {
+            const Icon = option.icon
+            const active = sortBy === option.id
+            return (
               <button
-                key={option.value}
-                onClick={() => onFilterChange(option.value as FilterOption)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${filterBy === option.value
-                  ? 'glass-purple text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
+                key={option.id}
+                onClick={() => onSortChange(option.id as SortOption)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                  active ? 'bg-white text-[#0a0a0f] shadow-lg' : 'text-gray-500 hover:text-white'
+                }`}
               >
+                <Icon className="w-3.5 h-3.5" />
                 {option.label}
               </button>
-            ))}
-          </div>
+            )
+          })}
         </div>
 
-        {(filterBy !== 'all' || searchTerm) && (
-          <span className="text-sm text-gray-500">
-            Showing {filteredCount} of {results.groups.length} groups
-            {searchTerm && <span className="text-purple-400 ml-1">matching "{searchTerm}"</span>}
-          </span>
+        {results.errors && results.errors.length > 0 && (
+          <button
+            onClick={onToggleErrors}
+            className={`flex items-center gap-2 px-5 py-3 rounded-[1.25rem] transition-all ${
+              showErrors 
+                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20' 
+                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20'
+            } text-[10px] font-black uppercase tracking-widest`}
+          >
+            <AlertCircle className="w-4 h-4" />
+            {results.errors.length} Warnings
+          </button>
         )}
-
-        {/* Keyboard shortcuts hint */}
-        <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">
-          <span className="opacity-60">Keyboard:</span>
-          <kbd className="px-1.5 py-0.5 rounded bg-white/5 text-gray-400">/</kbd>
-          <span className="opacity-60">search</span>
-          <kbd className="px-1.5 py-0.5 rounded bg-white/5 text-gray-400">A</kbd>
-          <span className="opacity-60">select</span>
-          <kbd className="px-1.5 py-0.5 rounded bg-white/5 text-gray-400">↑↓</kbd>
-          <span className="opacity-60">navigate</span>
-        </div>
       </div>
+
+      {(filterBy !== 'all' || searchTerm) && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute -bottom-10 left-8 text-[10px] font-bold text-gray-500 uppercase tracking-widest"
+        >
+          Filtered view: showing <span className="text-purple-400">{filteredCount}</span> of {results.groups.length} total clusters
+        </motion.div>
+      )}
     </div>
   )
 }
-
-export type { SortOption, FilterOption, SelectionStrategy }

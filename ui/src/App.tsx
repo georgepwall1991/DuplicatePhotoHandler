@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Sidebar } from './components/Sidebar'
 import { ScanView } from './components/ScanView'
 import { ResultsView } from './components/ResultsView'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
 
-// Re-export types from centralized location (avoids circular dependencies)
 export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
 import type { AppState, ScanResult, WatcherEvent } from './lib/types'
 
@@ -21,7 +21,6 @@ function AppContent() {
   const { showToast } = useToast()
   const watcherUnlistenRef = useRef<(() => void) | null>(null)
 
-  // Listen for watcher events
   useEffect(() => {
     const setupListener = async () => {
       watcherUnlistenRef.current = await listen<WatcherEvent>('watcher-event', (event) => {
@@ -49,7 +48,6 @@ function AppContent() {
     }
   }, [showToast])
 
-  // Toggle watcher on/off
   const handleToggleWatch = async () => {
     try {
       if (isWatching) {
@@ -58,7 +56,6 @@ function AppContent() {
         setWatchedPaths([])
         showToast('Folder watching stopped', 'info')
       } else {
-        // Use the last scanned paths or show a message
         if (scannedPaths.length === 0) {
           showToast('Run a scan first to set watched folders', 'warning')
           return
@@ -85,9 +82,28 @@ function AppContent() {
   }
 
   return (
-    <div className="flex h-screen p-4 gap-4 overflow-hidden relative">
-      {/* Ambient background noise */}
-      <div className="noise absolute inset-0 z-0 opacity-30" />
+    <div className="flex h-screen p-14 gap-10 overflow-hidden relative selection:bg-purple-500/30">
+      {/* Dynamic Background */}
+      <div className="mesh-bg" />
+      <div className="noise" />
+      <motion.div 
+        animate={{ 
+          x: [0, 100, 0], 
+          y: [0, -50, 0],
+          rotate: [0, 90, 0]
+        }}
+        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+        className="mesh-circle w-[600px] h-[600px] bg-purple-600/20 -top-48 -left-48" 
+      />
+      <motion.div 
+        animate={{ 
+          x: [0, -80, 0], 
+          y: [0, 120, 0],
+          rotate: [0, -120, 0]
+        }}
+        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+        className="mesh-circle w-[500px] h-[500px] bg-blue-600/15 bottom-0 right-0" 
+      />
 
       <Sidebar
         activeModule="duplicates"
@@ -98,35 +114,64 @@ function AppContent() {
         onToggleWatch={handleToggleWatch}
       />
 
-      <main className="flex-1 rounded-3xl glass-strong relative z-10 flex flex-col overflow-hidden shadow-2xl">
-        {appState === 'idle' && (
-          <ScanView
-            onScanStart={() => setAppState('scanning')}
-            onScanComplete={handleScanComplete}
-            onScanCancel={handleNewScan}
-            onProgress={setProgress}
-            onPathsSelected={setScannedPaths}
-          />
-        )}
+      <main className="flex-1 relative z-10 flex flex-col overflow-hidden">
+        <AnimatePresence mode="wait">
+          {appState === 'idle' && (
+            <motion.div
+              key="idle"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+              className="flex-1 glass-strong rounded-[2.5rem] overflow-hidden shadow-2xl"
+            >
+              <ScanView
+                onScanStart={() => setAppState('scanning')}
+                onScanComplete={handleScanComplete}
+                onScanCancel={handleNewScan}
+                onProgress={setProgress}
+                onPathsSelected={setScannedPaths}
+              />
+            </motion.div>
+          )}
 
-        {appState === 'scanning' && (
-          <ScanView
-            isScanning
-            progress={progress}
-            onScanStart={() => { }}
-            onScanComplete={handleScanComplete}
-            onScanCancel={handleNewScan}
-            onProgress={setProgress}
-            onPathsSelected={setScannedPaths}
-          />
-        )}
+          {appState === 'scanning' && (
+            <motion.div
+              key="scanning"
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+              className="flex-1 glass-strong rounded-[2.5rem] overflow-hidden shadow-2xl"
+            >
+              <ScanView
+                isScanning
+                progress={progress}
+                onScanStart={() => { }}
+                onScanComplete={handleScanComplete}
+                onScanCancel={handleNewScan}
+                onProgress={setProgress}
+                onPathsSelected={setScannedPaths}
+              />
+            </motion.div>
+          )}
 
-        {appState === 'results' && results && (
-          <ResultsView
-            results={results}
-            onNewScan={handleNewScan}
-          />
-        )}
+          {appState === 'results' && results && (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.5, ease: "circOut" }}
+              className="flex-1 glass-strong rounded-[2.5rem] overflow-hidden shadow-2xl"
+            >
+              <ResultsView
+                results={results}
+                onNewScan={handleNewScan}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   )

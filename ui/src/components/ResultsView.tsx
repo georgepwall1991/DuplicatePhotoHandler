@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { invoke } from '../lib/tauri'
 
 import type { ScanResult, FileInfo, QualityScore } from '../lib/types'
@@ -408,21 +409,29 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     }
 
     return (
-      <div className="space-y-3 stagger-children">
-        {filteredAndSortedGroups.map((group, index) => (
-          <div key={group.id} data-group-card>
-            <DuplicateGroupCard
-              group={group}
-              selectedFiles={selectedFiles}
-              onToggleFile={toggleFile}
-              onPreviewImage={setPreviewImage}
-              onCompare={handleCompare}
-              isFocused={focusedIndex === index}
-              isExpanded={expandedGroups.has(group.id)}
-              onToggleExpand={() => toggleGroupExpanded(group.id)}
-            />
-          </div>
-        ))}
+      <div className="space-y-4 pb-32">
+        <AnimatePresence>
+          {filteredAndSortedGroups.map((group, index) => (
+            <motion.div 
+              key={group.id} 
+              data-group-card
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(index * 0.05, 0.5) }}
+            >
+              <DuplicateGroupCard
+                group={group}
+                selectedFiles={selectedFiles}
+                onToggleFile={toggleFile}
+                onPreviewImage={setPreviewImage}
+                onCompare={handleCompare}
+                isFocused={focusedIndex === index}
+                isExpanded={expandedGroups.has(group.id)}
+                onToggleExpand={() => toggleGroupExpanded(group.id)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     )
   }

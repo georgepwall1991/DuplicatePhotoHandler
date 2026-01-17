@@ -1,3 +1,6 @@
+import { motion } from 'framer-motion'
+import { SlidersHorizontal, Info } from 'lucide-react'
+
 interface SensitivitySliderProps {
   threshold: number
   onThresholdChange: (value: number) => void
@@ -5,50 +8,79 @@ interface SensitivitySliderProps {
 
 export function SensitivitySlider({ threshold, onThresholdChange }: SensitivitySliderProps) {
   const getSensitivityLabel = (value: number): string => {
-    if (value <= 3) return 'Strict'
-    if (value <= 6) return 'Balanced'
-    return 'Relaxed'
+    if (value <= 3) return 'Surgical Precision'
+    if (value <= 6) return 'Standard Balance'
+    return 'Extended Similarity'
+  }
+
+  const getSensitivityColor = (value: number): string => {
+    if (value <= 3) return 'text-blue-400 bg-blue-400/10'
+    if (value <= 6) return 'text-purple-400 bg-purple-400/10'
+    return 'text-pink-400 bg-pink-400/10'
   }
 
   return (
-    <div className="glass-card rounded-2xl px-6 py-5 transition-all duration-300 hover:bg-white/5">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-xs uppercase tracking-wider text-gray-500">Sensitivity</span>
-        <span className="text-sm font-medium px-3 py-1 rounded-full bg-purple-500/20 text-purple-300">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="glass-card rounded-3xl p-6 transition-all duration-300 border-white/5"
+    >
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white/5 rounded-xl">
+            <SlidersHorizontal className="w-4 h-4 text-gray-400" />
+          </div>
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-gray-500">Threshold engine</span>
+        </div>
+        <motion.span 
+          key={threshold}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`text-[10px] font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest border border-white/5 ${getSensitivityColor(threshold)}`}
+        >
           {getSensitivityLabel(threshold)}
-        </span>
+        </motion.span>
       </div>
-      <div className="relative">
+
+      <div className="relative h-12 flex items-center">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <motion.div 
+              className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"
+              animate={{ width: `${((threshold - 1) / 9) * 100}%` }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            />
+          </div>
+        </div>
+        
         <input
           type="range"
           min="1"
           max="10"
           value={threshold}
           onChange={(e) => onThresholdChange(Number(e.target.value))}
-          className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
-            [&::-webkit-slider-thumb]:appearance-none
-            [&::-webkit-slider-thumb]:w-5
-            [&::-webkit-slider-thumb]:h-5
-            [&::-webkit-slider-thumb]:rounded-full
-            [&::-webkit-slider-thumb]:bg-gradient-to-br
-            [&::-webkit-slider-thumb]:from-purple-400
-            [&::-webkit-slider-thumb]:to-purple-600
-            [&::-webkit-slider-thumb]:shadow-lg
-            [&::-webkit-slider-thumb]:cursor-pointer
-            [&::-webkit-slider-thumb]:transition-transform
-            [&::-webkit-slider-thumb]:duration-200
-            [&::-webkit-slider-thumb]:hover:scale-110"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
         />
-        {/* Track fill */}
-        <div
-          className="absolute top-0 left-0 h-2 bg-gradient-to-r from-purple-500 to-purple-400 rounded-full pointer-events-none"
-          style={{ width: `${((threshold - 1) / 9) * 100}%` }}
-        />
+
+        <motion.div 
+          animate={{ left: `${((threshold - 1) / 9) * 100}%` }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className="absolute w-6 h-6 bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.4)] pointer-events-none -ml-3 flex items-center justify-center"
+        >
+          <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
+        </motion.div>
       </div>
-      <div className="flex justify-between text-xs text-gray-500 mt-3">
-        <span>Exact only</span>
-        <span>More matches</span>
+
+      <div className="flex justify-between mt-4">
+        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+          <Info className="w-3 h-3" />
+          <span>Strict</span>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+          <span>Flexible</span>
+          <Info className="w-3 h-3" />
+        </div>
       </div>
-    </div>
+    </motion.div>
   )
 }

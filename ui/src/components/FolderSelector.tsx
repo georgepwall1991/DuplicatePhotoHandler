@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import type { DragEvent } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { FolderPlus, FolderOpen, ArrowRight, Download } from 'lucide-react'
 import { open, listen } from '../lib/tauri'
 
 interface FolderSelectorProps {
@@ -10,24 +11,17 @@ interface FolderSelectorProps {
 export function FolderSelector({ selectedPaths, onPathsChange }: FolderSelectorProps) {
   const [isDragging, setIsDragging] = useState(false)
 
-  // Listen for Tauri file drop events
   useEffect(() => {
     const unlisten = listen('tauri://drag-drop', (event: { payload: { paths: string[] } }) => {
       const paths = event.payload.paths
       if (paths && paths.length > 0) {
-        // Filter to only directories (or accept all and let backend filter)
         onPathsChange(paths)
       }
       setIsDragging(false)
     })
 
-    const unlistenEnter = listen('tauri://drag-enter', () => {
-      setIsDragging(true)
-    })
-
-    const unlistenLeave = listen('tauri://drag-leave', () => {
-      setIsDragging(false)
-    })
+    const unlistenEnter = listen('tauri://drag-enter', () => setIsDragging(true))
+    const unlistenLeave = listen('tauri://drag-leave', () => setIsDragging(false))
 
     return () => {
       unlisten.then(fn => fn())
@@ -48,67 +42,79 @@ export function FolderSelector({ selectedPaths, onPathsChange }: FolderSelectorP
     }
   }
 
-  // HTML5 drag events for visual feedback (Tauri handles actual drops)
-  const handleDragOver = (e: DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-  }
-
-  const handleDragEnter = (e: DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e: DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
-  }
-
   return (
-    <button
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
       onClick={handleSelectFolder}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      className={`w-full glass-card rounded-2xl px-6 py-5 text-left transition-all duration-300 group ${
-        isDragging
-          ? 'bg-purple-500/20 border-2 border-dashed border-purple-500/50 scale-[1.02]'
-          : 'hover:bg-white/10 hover:scale-[1.02]'
+      className={`w-full glass-card rounded-3xl p-1 text-left transition-all duration-500 group relative overflow-hidden ${
+        isDragging ? 'bg-purple-500/10 border-purple-500/50' : ''
       }`}
     >
-      <div className="flex items-center gap-4">
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform duration-300 ${
-          isDragging
-            ? 'bg-gradient-to-br from-purple-500/30 to-blue-500/30 scale-110'
-            : 'bg-gradient-to-br from-blue-500/20 to-purple-500/20 group-hover:scale-110'
-        }`}>
-          <span className="text-2xl">{isDragging ? '📥' : '📁'}</span>
+      <div className="flex items-center gap-6 p-5">
+        <div className="relative">
+          <AnimatePresence mode="wait">
+            {isDragging ? (
+              <motion.div
+                key="dragging"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.5, opacity: 0 }}
+                className="w-16 h-16 rounded-2xl bg-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/20"
+              >
+                <Download className="w-8 h-8 text-white animate-bounce" />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="idle"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.5, opacity: 0 }}
+                className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-white/5 flex items-center justify-center group-hover:from-purple-500/20 group-hover:to-blue-500/20 transition-colors"
+              >
+                {selectedPaths.length > 0 ? (
+                  <FolderOpen className="w-8 h-8 text-purple-400" />
+                ) : (
+                  <FolderPlus className="w-8 h-8 text-gray-400 group-hover:text-purple-400 transition-colors" />
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
+
         <div className="flex-1 min-w-0">
-          <div className="text-xs uppercase tracking-wider text-gray-500 mb-1">Scan Location</div>
-          <div className={`truncate font-medium ${isDragging ? 'text-purple-300' : 'text-white'}`}>
-            {isDragging
-              ? 'Drop folders here...'
-              : selectedPaths.length > 0
-                ? selectedPaths.map(p => p.split('/').pop()).join(', ')
-                : 'Click or drag folders here...'}
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-400/60 mb-1">
+            Library Path
           </div>
-          {selectedPaths.length > 0 && !isDragging && (
-            <div className="text-xs text-gray-500 truncate mt-0.5">
-              {selectedPaths.length === 1 ? selectedPaths[0] : `${selectedPaths.length} folders selected`}
+          <div className="flex flex-col gap-0.5">
+            <div className={`truncate text-lg font-bold tracking-tight ${isDragging ? 'text-purple-300' : 'text-white'}`}>
+              {isDragging
+                ? 'Drop to scan'
+                : selectedPaths.length > 0
+                  ? selectedPaths.map(p => p.split('/').pop()).join(', ')
+                  : 'Add folders to process'}
             </div>
-          )}
+            <div className="text-xs font-medium text-gray-500 truncate">
+              {isDragging
+                ? 'Ready to import'
+                : selectedPaths.length > 0
+                  ? `${selectedPaths.length} location${selectedPaths.length > 1 ? 's' : ''} configured`
+                  : 'Drag & drop your photo library'}
+            </div>
+          </div>
         </div>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-          isDragging ? 'bg-purple-500/20' : 'bg-white/5 group-hover:bg-white/10'
+
+        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+          isDragging ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-gray-600 group-hover:text-white group-hover:bg-white/10'
         }`}>
-          <span className={`transition-colors ${isDragging ? 'text-purple-400' : 'text-gray-400 group-hover:text-white'}`}>
-            {isDragging ? '↓' : '→'}
-          </span>
+          <ArrowRight className={`w-5 h-5 transition-transform duration-500 ${isDragging ? 'translate-y-1 rotate-90' : 'group-hover:translate-x-1'}`} />
         </div>
       </div>
-    </button>
+
+      {/* Decorative background elements */}
+      <div className="absolute top-0 right-0 p-2 opacity-5 pointer-events-none">
+        <FolderPlus className="w-24 h-24 rotate-12" />
+      </div>
+    </motion.button>
   )
 }

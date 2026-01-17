@@ -1,24 +1,34 @@
 import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { convertFileSrc } from '../lib/tauri'
+import { 
+  Check, 
+  Star, 
+  ChevronDown, 
+  Trash2, 
+  Maximize2, 
+  Columns, 
+  Info,
+  Layers,
+  FileImage
+} from 'lucide-react'
 
 import type { DuplicateGroup } from '../lib/types'
 
-// Image thumbnail component with loading and error states
 function ImageThumbnail({
   src,
   className = '',
   style,
-  fallback = '📷'
+  fallback = <FileImage className="w-5 h-5 text-gray-600" />
 }: {
   src: string
   className?: string
   style?: React.CSSProperties
-  fallback?: string
+  fallback?: React.ReactNode
 }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
 
-  // Reset state when src changes (fixes stale state when reusing component)
   useEffect(() => {
     setLoaded(false)
     setError(false)
@@ -28,23 +38,23 @@ function ImageThumbnail({
 
   if (error) {
     return (
-      <div className={`flex items-center justify-center text-xl bg-[#1a1a2e] ${className}`} style={style}>
+      <div className={`flex items-center justify-center bg-white/5 ${className}`} style={style}>
         {fallback}
       </div>
     )
   }
 
   return (
-    <div className={`relative overflow-hidden bg-[#1a1a2e] ${className}`} style={style}>
+    <div className={`relative overflow-hidden bg-white/5 ${className}`} style={style}>
       {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a2e]">
-          <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+        <div className="absolute inset-0 flex items-center justify-center bg-white/5">
+          <div className="w-4 h-4 border-2 border-purple-500/20 border-t-purple-500 rounded-full animate-spin" />
         </div>
       )}
       <img
         src={assetUrl}
         alt=""
-        className={`w-full h-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full h-full object-cover transition-all duration-500 ${loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-110'}`}
         onLoad={() => setLoaded(true)}
         onError={() => setError(true)}
         loading="lazy"
@@ -76,24 +86,6 @@ const getFileName = (path: string): string => {
   return path.split('/').pop() || path
 }
 
-const getMatchTypeStyle = (matchType: string): { bg: string; text: string; glow: string } => {
-  if (matchType.includes('Exact')) return {
-    bg: 'bg-red-500/20',
-    text: 'text-red-400',
-    glow: 'shadow-red-500/20'
-  }
-  if (matchType.includes('NearExact')) return {
-    bg: 'bg-orange-500/20',
-    text: 'text-orange-400',
-    glow: 'shadow-orange-500/20'
-  }
-  return {
-    bg: 'bg-yellow-500/20',
-    text: 'text-yellow-400',
-    glow: 'shadow-yellow-500/20'
-  }
-}
-
 export function DuplicateGroupCard({
   group,
   selectedFiles,
@@ -105,181 +97,187 @@ export function DuplicateGroupCard({
   onToggleExpand,
 }: DuplicateGroupCardProps) {
   const [internalExpanded, setInternalExpanded] = useState(false)
-
-  // Use external expanded state if provided, otherwise use internal state
   const expanded = externalExpanded !== undefined ? externalExpanded : internalExpanded
   const toggleExpand = onToggleExpand ?? (() => setInternalExpanded(!internalExpanded))
 
-  const matchTypeLabel = group.match_type
-    .replace('NearExact', 'Near-Exact')
-    .replace(/([A-Z])/g, ' $1')
-    .trim()
-
-  const matchStyle = getMatchTypeStyle(group.match_type)
-
-  // Count selected files in this group (excluding representative)
-  const selectableCount = group.photos.filter(p => p !== group.representative).length
-  const selectedInGroup = group.photos.filter(p => selectedFiles.has(p) && p !== group.representative).length
-
   return (
-    <div className={`glass-card rounded-2xl overflow-hidden transition-all duration-300 hover:bg-white/5 ${isFocused ? 'ring-2 ring-purple-500 ring-opacity-70' : ''}`}>
-      {/* Header */}
+    <motion.div 
+      layout
+      className={`glass-card rounded-[2rem] overflow-hidden border-white/5 group/card transition-all duration-500 ${
+        isFocused ? 'ring-2 ring-purple-500/50' : ''
+      }`}
+    >
       <button
         onClick={toggleExpand}
-        className="w-full p-5 flex items-center gap-4 text-left group"
+        className="w-full p-6 flex items-center gap-6 text-left"
       >
-        {/* Thumbnails preview - Fixed stacking */}
-        <div className="flex -space-x-3 isolate">
+        <div className="flex -space-x-4 isolate group/thumbs">
           {group.photos.slice(0, 3).map((photo, i) => (
-            <ImageThumbnail
+            <motion.div
               key={photo}
-              src={photo}
-              className="w-14 h-14 rounded-xl glass-strong transition-transform duration-200 group-hover:scale-105"
-              style={{ zIndex: 3 - i, transitionDelay: `${i * 50}ms` }}
-            />
+              whileHover={{ y: -8, scale: 1.1, zIndex: 10 }}
+              style={{ zIndex: 3 - i }}
+            >
+              <ImageThumbnail
+                src={photo}
+                className="w-16 h-16 rounded-2xl glass-strong border-2 border-[#0a0a0f] shadow-2xl transition-all duration-300"
+              />
+            </motion.div>
           ))}
           {group.photos.length > 3 && (
-            <div className="w-14 h-14 rounded-xl glass-strong flex items-center justify-center text-sm font-medium text-gray-400">
+            <div className="w-16 h-16 rounded-2xl glass-strong border-2 border-[#0a0a0f] flex items-center justify-center text-xs font-black text-purple-400 bg-purple-500/10 z-0">
               +{group.photos.length - 3}
             </div>
           )}
         </div>
 
-        {/* Info */}
-        <div className="flex-1 min-w-0 px-2">
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${matchStyle.bg} ${matchStyle.text} border border-white/5`}>
-              {matchTypeLabel}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-lg bg-white/5 text-gray-400 border border-white/5`}>
+              {group.match_type.replace(/([A-Z])/g, ' $1').trim()}
             </span>
-            <span className="text-sm text-gray-400 font-medium">
-              {group.photos.length} photos
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+              {group.photos.length} instances
             </span>
           </div>
-          <div className="text-white truncate mt-1 font-medium text-base tracking-tight" title={getFileName(group.representative)}>
+          <h3 className="text-white text-lg font-bold tracking-tight truncate group-hover/card:text-purple-400 transition-colors">
             {getFileName(group.representative)}
-          </div>
+          </h3>
         </div>
 
-        {/* Selection indicator */}
-        {selectedInGroup > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/20 border border-red-500/30">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
-            <span className="text-sm font-medium text-red-400">
-              {selectedInGroup}/{selectableCount}
-            </span>
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <div className="text-xl font-black text-white tracking-tighter">
+              {formatBytes(group.duplicate_size_bytes)}
+            </div>
+            <div className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-600">Reclaimable</div>
           </div>
-        )}
 
-        {/* Size badge */}
-        <div className="text-right">
-          <div className="text-lg font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-            {formatBytes(group.duplicate_size_bytes)}
-          </div>
-          <div className="text-xs text-gray-500">to free</div>
-        </div>
-
-        {/* Expand icon */}
-        <div className={`w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center transition-all duration-300 ${expanded ? 'rotate-180 bg-purple-500/20' : ''}`}>
-          <span className="text-gray-400 text-sm">▼</span>
+          <motion.div 
+            animate={{ rotate: expanded ? 180 : 0 }}
+            className={`w-10 h-10 rounded-2xl bg-white/5 flex items-center justify-center text-gray-500 group-hover/card:bg-white/10 group-hover/card:text-white transition-all`}
+          >
+            <ChevronDown className="w-5 h-5" />
+          </motion.div>
         </div>
       </button>
 
-      {/* Expanded content */}
-      {expanded && (
-        <div className="border-t border-white/5 p-5">
-          <div className="space-y-2">
-            {group.photos.map((photo) => {
-              const isRepresentative = photo === group.representative
-              const isSelected = selectedFiles.has(photo)
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+          >
+            <div className="px-6 pb-6 pt-2 border-t border-white/5 space-y-3">
+              {group.photos.map((photo) => {
+                const isRepresentative = photo === group.representative
+                const isSelected = selectedFiles.has(photo)
 
-              return (
-                <div
-                  key={photo}
-                  className={`flex items-center gap-3 p-4 rounded-xl transition-all duration-200 ${isRepresentative
-                    ? 'glass-card border border-green-500/20 glow-green'
-                    : isSelected
-                      ? 'bg-red-500/10 border border-red-500/30'
-                      : 'glass hover:bg-white/5'
+                return (
+                  <motion.div
+                    key={photo}
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    className={`group/item flex items-center gap-4 p-4 rounded-2xl transition-all duration-300 ${
+                      isRepresentative
+                        ? 'bg-purple-500/10 border border-purple-500/20'
+                        : isSelected
+                          ? 'bg-red-500/10 border border-red-500/20'
+                          : 'bg-white/5 border border-transparent hover:border-white/10'
                     }`}
-                >
-                  {/* Checkbox */}
-                  {!isRepresentative && (
+                  >
+                    <div className="relative">
+                      <ImageThumbnail
+                        src={photo}
+                        className="w-20 h-20 rounded-xl shadow-xl"
+                      />
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => onPreviewImage?.(photo)}
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover/item:opacity-100 flex items-center justify-center rounded-xl transition-opacity"
+                      >
+                        <Maximize2 className="w-6 h-6 text-white" />
+                      </motion.button>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-bold text-white truncate">{getFileName(photo)}</span>
+                        {isRepresentative && (
+                          <div className="px-2 py-0.5 rounded-md bg-purple-500 text-[8px] font-black uppercase tracking-widest text-white">
+                            Optimal
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 font-mono truncate">{photo}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {!isRepresentative && (
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => onToggleFile(photo)}
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all ${
+                            isSelected
+                              ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                              : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          {isSelected ? <Trash2 className="w-3 h-3" /> : <Layers className="w-3 h-3" />}
+                          {isSelected ? 'Remove' : 'Select'}
+                        </motion.button>
+                      )}
+                      
+                      {isRepresentative && (
+                        <div className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-[10px] uppercase tracking-widest bg-purple-500/20 text-purple-400 border border-purple-500/20">
+                          <Star className="w-3 h-3 fill-current" />
+                          Keeper
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )
+              })}
+
+              <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
+                <div className="flex items-center gap-2 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                  <Info className="w-3 h-3" />
+                  <span>The AI selected the sharpest image as the Keeper</span>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  {group.photos.length >= 2 && onCompare && (
                     <button
-                      onClick={() => onToggleFile(photo)}
-                      className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-200 ${isSelected
-                        ? 'bg-gradient-to-br from-red-500 to-red-600 shadow-lg shadow-red-500/30'
-                        : 'bg-white/10 hover:bg-white/20'
-                        }`}
+                      onClick={() => onCompare(group.representative, group.photos.find(p => p !== group.representative)!)}
+                      className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:bg-blue-400/10 rounded-xl transition-colors"
                     >
-                      {isSelected && <span className="text-white text-sm font-bold">✓</span>}
+                      <Columns className="w-3 h-3" />
+                      Side-by-Side
                     </button>
                   )}
-
-                  {/* Keep badge for representative */}
-                  {isRepresentative && (
-                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30">
-                      <span className="text-white text-sm">★</span>
-                    </div>
-                  )}
-
-                  {/* Photo thumbnail - clickable for preview */}
                   <button
-                    onClick={() => onPreviewImage?.(photo)}
-                    className="focus:outline-none focus:ring-2 focus:ring-purple-500 rounded-xl transition-transform hover:scale-110"
+                    onClick={() => {
+                      group.photos.forEach((photo) => {
+                        if (photo !== group.representative && !selectedFiles.has(photo)) {
+                          onToggleFile(photo)
+                        }
+                      })
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-purple-400 hover:bg-purple-500/10 rounded-xl transition-colors"
                   >
-                    <ImageThumbnail
-                      src={photo}
-                      className="w-12 h-12 rounded-xl glass-strong cursor-pointer"
-                    />
+                    <Check className="w-3 h-3" />
+                    Select All
                   </button>
-
-                  {/* Path */}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white truncate font-medium">{getFileName(photo)}</div>
-                    <div className="text-xs text-gray-500 truncate">{photo}</div>
-                  </div>
-
-                  {/* Status */}
-                  {isRepresentative && (
-                    <span className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-green-500/20 text-green-400">
-                      Keep
-                    </span>
-                  )}
                 </div>
-              )
-            })}
-          </div>
-
-          {/* Group actions */}
-          <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-            <span className="text-sm text-gray-500">
-              <span className="text-green-400">★</span> marks the recommended photo to keep
-            </span>
-            <div className="flex items-center gap-4">
-              {group.photos.length >= 2 && onCompare && (
-                <button
-                  onClick={() => onCompare(group.representative, group.photos.find(p => p !== group.representative)!)}
-                  className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors"
-                >
-                  Compare
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  group.photos.forEach((photo) => {
-                    if (photo !== group.representative && !selectedFiles.has(photo)) {
-                      onToggleFile(photo)
-                    }
-                  })
-                }}
-                className="text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
-              >
-                Select all duplicates
-              </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }

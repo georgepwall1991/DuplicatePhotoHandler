@@ -1,3 +1,6 @@
+import { motion } from 'framer-motion'
+import { Rocket, Search } from 'lucide-react'
+
 interface ScanButtonProps {
   isReady: boolean
   onClick: () => void
@@ -5,37 +8,80 @@ interface ScanButtonProps {
 
 export function ScanButton({ isReady, onClick }: ScanButtonProps) {
   return (
-    <button
+    <motion.button
+      whileHover={isReady ? { scale: 1.05 } : {}}
+      whileTap={isReady ? { scale: 0.95 } : {}}
       onClick={onClick}
       disabled={!isReady}
-      className={`group relative w-56 h-56 rounded-full transition-all duration-500 hover:scale-105 animate-scale-in ${!isReady ? 'opacity-50 grayscale cursor-not-allowed' : ''
-        }`}
+      className={`group relative w-64 h-64 rounded-full transition-all duration-700 ${
+        !isReady ? 'opacity-40 grayscale-[0.8] cursor-not-allowed' : 'cursor-pointer'
+      }`}
     >
-      {/* Outer glow ring */}
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-purple-500/30 to-purple-700/30 blur-xl group-hover:blur-2xl transition-all duration-500 group-hover:from-purple-400/40 group-hover:to-purple-600/40" />
+      {/* Dynamic Aura */}
+      <motion.div
+        animate={isReady ? {
+          scale: [1, 1.15, 1],
+          opacity: [0.3, 0.6, 0.3],
+        } : {}}
+        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute -inset-8 rounded-full bg-purple-500/20 blur-3xl"
+      />
 
-      {/* Animated gradient border */}
-      <div className="absolute inset-0 rounded-full gradient-border opacity-60 group-hover:opacity-100 transition-opacity" />
+      {/* Rotating Ring */}
+      <div className="absolute inset-0 rounded-full border-2 border-dashed border-purple-500/20 group-hover:border-purple-500/40 animate-[spin_20s_linear_infinite]" />
 
-      {/* Glass background */}
-      <div className="absolute inset-2 rounded-full glass-strong" />
-
-      {/* Inner content */}
-      <div className={`absolute inset-4 rounded-full bg-gradient-to-br from-[#1a1a2e] to-[#0f0f1a] flex items-center justify-center shadow-inner transition-colors duration-500 ${isReady ? 'from-[#2a2a4a] to-[#1a1a2e]' : ''
-        }`}>
-        <div className="text-center">
-          <div className={`text-6xl mb-2 transition-all duration-500 ${isReady ? 'scale-110 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]' : 'opacity-40'
+      {/* Main Button Body */}
+      <div className="absolute inset-4 rounded-full glass-strong border border-white/10 shadow-2xl flex items-center justify-center overflow-hidden">
+        {/* Interior Gradient */}
+        <div className={`absolute inset-0 bg-gradient-to-br transition-opacity duration-700 ${
+          isReady ? 'from-purple-600/20 to-blue-600/20 opacity-100' : 'from-gray-800/20 to-gray-900/20 opacity-50'
+        }`} />
+        
+        {/* Content */}
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <motion.div
+            animate={isReady ? {
+              y: [0, -4, 0],
+            } : {}}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            {isReady ? (
+              <Rocket className="w-16 h-16 text-purple-400 drop-shadow-[0_0_15px_rgba(168,85,247,0.5)]" />
+            ) : (
+              <Search className="w-16 h-16 text-gray-500" />
+            )}
+          </motion.div>
+          
+          <div className="flex flex-col items-center">
+            <span className={`text-sm font-black tracking-[0.2em] transition-colors duration-500 ${
+              isReady ? 'text-white' : 'text-gray-500'
             }`}>
-            {isReady ? '🚀' : '🔍'}
-          </div>
-          <div className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent tracking-tight">
-            {isReady ? 'START SCAN' : 'READY'}
+              {isReady ? 'INITIALIZE' : 'SELECT FOLDER'}
+            </span>
+            {isReady && (
+              <motion.span 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-[10px] text-purple-400 font-bold uppercase tracking-widest mt-1"
+              >
+                Deep Scan Ready
+              </motion.span>
+            )}
           </div>
         </div>
+
+        {/* Shimmer Effect */}
+        <div className="absolute inset-0 w-full h-full shimmer opacity-20 pointer-events-none" />
       </div>
 
-      {/* Hover glow pulse */}
-      <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-100 animate-pulse-glow transition-opacity duration-500" />
-    </button>
+      {/* Outer Pulse Ring */}
+      {isReady && (
+        <motion.div
+          animate={{ scale: [1, 1.4], opacity: [0.5, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+          className="absolute inset-0 rounded-full border border-purple-500/50"
+        />
+      )}
+    </motion.button>
   )
 }

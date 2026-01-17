@@ -1,4 +1,6 @@
+import { motion } from 'framer-motion'
 import { ProgressRing } from './ProgressRing'
+import { Activity, Images, Layers, XCircle, Terminal } from 'lucide-react'
 
 interface ScanProgressProps {
   phase: string
@@ -20,55 +22,91 @@ export function ScanProgress({
   onCancel,
 }: ScanProgressProps) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-hidden">
-      {/* Animated background rings */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="absolute w-[600px] h-[600px] rounded-full border border-purple-500/10 animate-ring-pulse" />
-        <div className="absolute w-[500px] h-[500px] rounded-full border border-purple-500/15 animate-ring-pulse" style={{ animationDelay: '0.5s' }} />
-        <div className="absolute w-[400px] h-[400px] rounded-full border border-purple-500/20 animate-ring-pulse" style={{ animationDelay: '1s' }} />
-        <div className="w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" />
+    <div className="h-full flex flex-col items-center justify-center p-12 relative overflow-hidden bg-[#020205]">
+      {/* Background Tech Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+        <div className="absolute top-0 left-0 w-full h-full" 
+          style={{ 
+            backgroundImage: 'linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px)',
+            backgroundSize: '100px 100px'
+          }} 
+        />
+        <motion.div 
+          animate={{ y: [0, 1000] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+          className="absolute top-[-1000px] left-0 w-full h-full bg-gradient-to-b from-transparent via-purple-500/10 to-transparent"
+        />
       </div>
 
-      {/* Floating particles */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-purple-400/40 rounded-full animate-float" style={{ animationDelay: '0s' }} />
-        <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-purple-300/30 rounded-full animate-float" style={{ animationDelay: '1s' }} />
-        <div className="absolute bottom-1/3 left-1/3 w-2 h-2 bg-purple-500/30 rounded-full animate-float" style={{ animationDelay: '0.5s' }} />
-        <div className="absolute bottom-1/4 right-1/3 w-1.5 h-1.5 bg-purple-400/40 rounded-full animate-float" style={{ animationDelay: '1.5s' }} />
+      {/* Main Scanner */}
+      <div className="relative mb-16">
+        <ProgressRing percent={percent} size={280} strokeWidth={10} />
       </div>
 
-      <div className="relative animate-scale-in">
-        <ProgressRing percent={percent} size={220} />
-      </div>
-
-      <div className="mt-8 text-center relative animate-fade-in" style={{ animationDelay: '0.2s' }}>
-        <h2 className="text-2xl font-semibold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
-          {phase}...
+      {/* Status Console */}
+      <div className="w-full max-w-xl text-center mb-16">
+        <motion.div 
+          key={phase}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 rounded-xl border border-purple-500/20 text-purple-400 mb-6"
+        >
+          <Activity className="w-4 h-4 animate-pulse" />
+          <span className="text-xs font-black uppercase tracking-widest">{phase}</span>
+        </motion.div>
+        
+        <h2 className="text-3xl font-black text-white tracking-tight mb-4 h-8">
+          {message}
         </h2>
-        <p className="text-gray-400">{message}</p>
+        
+        <div className="flex items-center justify-center gap-2 text-gray-500 font-mono text-xs">
+          <Terminal className="w-3 h-3" />
+          <span className="animate-pulse">System executing LSH algorithms...</span>
+        </div>
       </div>
 
-      <div className="mt-8 flex gap-6 relative stagger-children">
-        <div className="glass-card rounded-2xl px-8 py-4 text-center transition-transform hover:scale-105">
-          <div className="text-3xl font-bold text-white">{photosFound.toLocaleString()}</div>
-          <div className="text-xs uppercase tracking-wider text-gray-400 mt-1">Photos Found</div>
-        </div>
-        <div className="glass-card rounded-2xl px-8 py-4 text-center glow-green transition-transform hover:scale-105">
-          <div className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-            {duplicatesFound}
+      {/* Live Metrics Grid */}
+      <div className="grid grid-cols-2 gap-6 w-full max-w-xl mb-12">
+        <motion.div 
+          whileHover={{ scale: 1.02 }}
+          className="glass-card rounded-[2rem] p-8 border-white/5 relative overflow-hidden group"
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Images className="w-12 h-12 text-blue-400" />
           </div>
-          <div className="text-xs uppercase tracking-wider text-gray-400 mt-1">Duplicates</div>
-        </div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400/60 mb-2">Total Scanned</div>
+          <div className="text-4xl font-black text-white tracking-tighter">
+            {photosFound.toLocaleString()}
+          </div>
+        </motion.div>
+
+        <motion.div 
+          whileHover={{ scale: 1.02 }}
+          className="glass-card rounded-[2rem] p-8 border-white/5 relative overflow-hidden group"
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Layers className="w-12 h-12 text-purple-400" />
+          </div>
+          <div className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-400/60 mb-2">Identified</div>
+          <div className="text-4xl font-black text-white tracking-tighter">
+            {duplicatesFound.toLocaleString()}
+          </div>
+        </motion.div>
       </div>
 
-      {/* Cancel Button */}
-      <button
+      {/* Control Actions */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
         onClick={onCancel}
         disabled={isCancelling}
-        className="mt-8 px-6 py-3 rounded-xl glass-card text-gray-300 hover:text-white hover:bg-red-500/20 transition-all duration-200 disabled:opacity-50"
+        className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-gray-400 hover:text-red-400 hover:bg-red-400/10 hover:border-red-400/20 transition-all duration-300 group"
       >
-        {isCancelling ? 'Cancelling...' : 'Cancel Scan'}
-      </button>
+        <XCircle className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
+        <span className="text-sm font-bold uppercase tracking-widest">
+          {isCancelling ? 'Terminating Process...' : 'Abort Operation'}
+        </span>
+      </motion.button>
     </div>
   )
 }
