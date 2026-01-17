@@ -36,6 +36,11 @@ const formatBytes = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
+// Type guard to check if an item id is a valid ActiveModule
+const isActiveModule = (id: string): id is ActiveModule => {
+  return id === 'duplicates' || id === 'screenshots'
+}
+
 export function Sidebar({
   activeModule,
   onModuleChange,
@@ -154,12 +159,21 @@ export function Sidebar({
                     {group.items.map((item) => {
                       const Icon = item.icon
                       const isActive = item.id === activeModule
+                      const canNavigate = item.available && isActiveModule(item.id)
+
+                      const handleClick = canNavigate
+                        ? () => {
+                            if (isActiveModule(item.id)) {
+                              onModuleChange(item.id)
+                            }
+                          }
+                        : undefined
 
                       return (
                         <button
                           key={item.id}
                           type="button"
-                          onClick={item.available ? () => onModuleChange(item.id as ActiveModule) : undefined}
+                          onClick={handleClick}
                           disabled={!item.available}
                           className={`group relative w-full overflow-hidden px-3 py-3 text-left transition ${
                             isActive
