@@ -7,6 +7,15 @@ use duplicate_photo_cleaner::core::large_files::{LargeFileScanner, LargeFileScan
 use duplicate_photo_cleaner::core::organize::{
     OperationMode, OrganizeConfig, OrganizeExecutor, OrganizePlan, OrganizePlanner, OrganizeResult,
 };
+use duplicate_photo_cleaner::core::unorganized::{
+    UnorganizedConfig, UnorganizedResult, UnorganizedScanner,
+};
+use duplicate_photo_cleaner::core::similar::{
+    SimilarConfig, SimilarResult, SimilarScanner,
+};
+use duplicate_photo_cleaner::core::history::{
+    HistoryRepository, ModuleType as HistoryModuleType, ScanHistoryEntry, ScanHistoryResult, ScanStatus,
+};
 use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
 use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
 use duplicate_photo_cleaner::core::watcher::{FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent};
@@ -29,6 +38,8 @@ pub struct AppState {
     pub watcher: Mutex<Option<FolderWatcher>>,
     /// Stored organize plan for execution
     pub organize_plan: Mutex<Option<OrganizePlan>>,
+    /// History repository for storing scan results
+    pub history: Mutex<Option<HistoryRepository>>,
 }
 
 impl Default for AppState {
@@ -39,6 +50,7 @@ impl Default for AppState {
             cancelled: Arc::new(AtomicBool::new(false)),
             watcher: Mutex::new(None),
             organize_plan: Mutex::new(None),
+            history: Mutex::new(None),
         }
     }
 }
@@ -1075,4 +1087,402 @@ pub async fn execute_organize_plan(
     }
 
     Ok(result)
+}
+
+/// Progress event for unorganized file scan
+#[derive(Clone, Serialize)]
+pub struct UnorganizedProgress {
+    pub phase: String,
+    pub files_scanned: usize,
+    pub message: String,
+}
+
+/// Scan for unorganized/loose media files
+#[tauri::command]
+pub async fn scan_unorganized(
+    app: AppHandle,
+    config: UnorganizedConfig,
+    state: State<'_, AppState>,
+) -> Result<UnorganizedResult, String> {
+    // Check if already scanning
+    {
+        let mut scanning = state.scanning.lock().map_err(|e| e.to_string())?;
+        if *scanning {
+            return Err("A scan is already in progress".to_string());
+        }
+        *scanning = true;
+    }
+
+    // Helper to reset scanning state on any exit path
+    let reset_scanning = || {
+        if let Ok(mut scanning) = state.scanning.lock() {
+            *scanning = false;
+        }
+    };
+
+    // Emit initial progress
+    let _ = app.emit(
+        "unorganized-scan-event",
+        UnorganizedProgress {
+            phase: "Scanning".to_string(),
+            files_scanned: 0,
+            message: "Starting scan...".to_string(),
+        },
+    );
+
+    // Run scan with progress callback
+    let app_handle = app.clone();
+    let result = match tokio::task::spawn_blocking(move || {
+        UnorganizedScanner::scan(&config, |count, message| {
+            let _ = app_handle.emit(
+                "unorganized-scan-event",
+                UnorganizedProgress {
+                    phase: "Scanning".to_string(),
+                    files_scanned: count,
+                    message: message.to_string(),
+                },
+            );
+        })
+    })
+    .await
+    {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            reset_scanning();
+            return Err(e);
+        }
+        Err(e) => {
+            reset_scanning();
+            return Err(format!("Scan task panicked: {}", e));
+        }
+    };
+
+    // Emit completion event
+    let _ = app.emit(
+        "unorganized-scan-event",
+        UnorganizedProgress {
+            phase: "Complete".to_string(),
+            files_scanned: result.total_files,
+            message: format!("Found {} unorganized files", result.total_files),
+        },
+    );
+
+    // Reset scanning state
+    reset_scanning();
+
+    Ok(result)
+}
+
+/// Progress event for similar photo scan
+#[derive(Clone, Serialize)]
+pub struct SimilarScanProgress {
+    pub phase: String,
+    pub current: usize,
+    pub total: usize,
+}
+
+/// Similar photo DTO for frontend
+#[derive(Debug, Serialize)]
+pub struct SimilarPhotoDto {
+    pub path: String,
+    pub distance: u32,
+    pub similarity_percent: f64,
+    pub match_type: String,
+    pub size_bytes: u64,
+}
+
+/// Similar group DTO for frontend
+#[derive(Debug, Serialize)]
+pub struct SimilarGroupDto {
+    pub id: String,
+    pub reference: String,
+    pub reference_size_bytes: u64,
+    pub similar_photos: Vec<SimilarPhotoDto>,
+    pub average_similarity: f64,
+    pub total_size_bytes: u64,
+}
+
+/// Similar result DTO for frontend
+#[derive(Debug, Serialize)]
+pub struct SimilarResultDto {
+    pub groups: Vec<SimilarGroupDto>,
+    pub total_photos_scanned: usize,
+    pub similar_groups_found: usize,
+    pub similar_photos_found: usize,
+    pub duration_ms: u64,
+}
+
+impl From<SimilarResult> for SimilarResultDto {
+    fn from(result: SimilarResult) -> Self {
+        Self {
+            groups: result
+                .groups
+                .into_iter()
+                .map(|g| SimilarGroupDto {
+                    id: g.id,
+                    reference: g.reference,
+                    reference_size_bytes: g.reference_size_bytes,
+                    similar_photos: g
+                        .similar_photos
+                        .into_iter()
+                        .map(|p| SimilarPhotoDto {
+                            path: p.path,
+                            distance: p.distance,
+                            similarity_percent: p.similarity_percent,
+                            match_type: format!("{:?}", p.match_type),
+                            size_bytes: p.size_bytes,
+                        })
+                        .collect(),
+                    average_similarity: g.average_similarity,
+                    total_size_bytes: g.total_size_bytes,
+                })
+                .collect(),
+            total_photos_scanned: result.total_photos_scanned,
+            similar_groups_found: result.similar_groups_found,
+            similar_photos_found: result.similar_photos_found,
+            duration_ms: result.duration_ms,
+        }
+    }
+}
+
+/// Scan for similar (not exact duplicate) photos
+#[tauri::command]
+pub async fn scan_similar(
+    app: AppHandle,
+    config: SimilarConfig,
+    state: State<'_, AppState>,
+) -> Result<SimilarResultDto, String> {
+    // Check if already scanning
+    {
+        let mut scanning = state.scanning.lock().map_err(|e| e.to_string())?;
+        if *scanning {
+            return Err("A scan is already in progress".to_string());
+        }
+        *scanning = true;
+    }
+
+    // Helper to reset scanning state on any exit path
+    let reset_scanning = || {
+        if let Ok(mut scanning) = state.scanning.lock() {
+            *scanning = false;
+        }
+    };
+
+    // Emit initial progress
+    let _ = app.emit(
+        "similar-scan-event",
+        SimilarScanProgress {
+            phase: "Scanning".to_string(),
+            current: 0,
+            total: 0,
+        },
+    );
+
+    // Run scan with progress callback
+    let app_handle = app.clone();
+    let result = match tokio::task::spawn_blocking(move || {
+        SimilarScanner::scan(&config, |phase, current, total| {
+            let _ = app_handle.emit(
+                "similar-scan-event",
+                SimilarScanProgress {
+                    phase: phase.to_string(),
+                    current,
+                    total,
+                },
+            );
+        })
+    })
+    .await
+    {
+        Ok(Ok(result)) => result,
+        Ok(Err(e)) => {
+            reset_scanning();
+            return Err(e);
+        }
+        Err(e) => {
+            reset_scanning();
+            return Err(format!("Scan task panicked: {}", e));
+        }
+    };
+
+    // Emit completion event
+    let _ = app.emit(
+        "similar-scan-event",
+        SimilarScanProgress {
+            phase: "Complete".to_string(),
+            current: result.similar_groups_found,
+            total: result.total_photos_scanned,
+        },
+    );
+
+    // Reset scanning state
+    reset_scanning();
+
+    Ok(result.into())
+}
+
+/// History entry DTO for frontend
+#[derive(Debug, Serialize)]
+pub struct ScanHistoryEntryDto {
+    pub id: String,
+    pub module_type: String,
+    pub scan_time: i64,
+    pub paths: Vec<String>,
+    pub total_files: usize,
+    pub groups_found: Option<usize>,
+    pub duplicates_found: Option<usize>,
+    pub potential_savings: Option<u64>,
+    pub duration_ms: u64,
+    pub status: String,
+}
+
+impl From<ScanHistoryEntry> for ScanHistoryEntryDto {
+    fn from(entry: ScanHistoryEntry) -> Self {
+        Self {
+            id: entry.id,
+            module_type: entry.module_type.as_str().to_string(),
+            scan_time: entry.scan_time,
+            paths: entry.paths,
+            total_files: entry.total_files,
+            groups_found: entry.groups_found,
+            duplicates_found: entry.duplicates_found,
+            potential_savings: entry.potential_savings,
+            duration_ms: entry.duration_ms,
+            status: entry.status.as_str().to_string(),
+        }
+    }
+}
+
+/// History result DTO for frontend
+#[derive(Debug, Serialize)]
+pub struct ScanHistoryResultDto {
+    pub entries: Vec<ScanHistoryEntryDto>,
+    pub total_count: usize,
+}
+
+impl From<ScanHistoryResult> for ScanHistoryResultDto {
+    fn from(result: ScanHistoryResult) -> Self {
+        Self {
+            entries: result.entries.into_iter().map(|e| e.into()).collect(),
+            total_count: result.total_count,
+        }
+    }
+}
+
+/// Initialize the history repository
+fn get_or_init_history(state: &AppState, app: &AppHandle) -> Result<(), String> {
+    let mut history = state.history.lock().map_err(|e| e.to_string())?;
+
+    if history.is_none() {
+        let app_data_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+        let history_db_path = app_data_dir.join("history.db");
+        let repo = HistoryRepository::open(&history_db_path)?;
+        *history = Some(repo);
+    }
+
+    Ok(())
+}
+
+/// Get scan history
+#[tauri::command]
+pub fn get_scan_history(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<ScanHistoryResultDto, String> {
+    get_or_init_history(&state, &app)?;
+
+    let history = state.history.lock().map_err(|e| e.to_string())?;
+    let repo = history.as_ref().ok_or("History repository not initialized")?;
+
+    let result = repo.list_scans(limit.unwrap_or(50), offset.unwrap_or(0))?;
+    Ok(result.into())
+}
+
+/// Get a specific scan by ID
+#[tauri::command]
+pub fn get_scan_details(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    scan_id: String,
+) -> Result<Option<ScanHistoryEntryDto>, String> {
+    get_or_init_history(&state, &app)?;
+
+    let history = state.history.lock().map_err(|e| e.to_string())?;
+    let repo = history.as_ref().ok_or("History repository not initialized")?;
+
+    let entry = repo.get_scan(&scan_id)?;
+    Ok(entry.map(|e| e.into()))
+}
+
+/// Delete a scan history entry
+#[tauri::command]
+pub fn delete_scan_history(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    scan_id: String,
+) -> Result<bool, String> {
+    get_or_init_history(&state, &app)?;
+
+    let history = state.history.lock().map_err(|e| e.to_string())?;
+    let repo = history.as_ref().ok_or("History repository not initialized")?;
+
+    repo.delete_scan(&scan_id)
+}
+
+/// Clear all scan history
+#[tauri::command]
+pub fn clear_scan_history(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    get_or_init_history(&state, &app)?;
+
+    let history = state.history.lock().map_err(|e| e.to_string())?;
+    let repo = history.as_ref().ok_or("History repository not initialized")?;
+
+    repo.clear_history()
+}
+
+/// Helper to save scan to history
+pub fn save_to_history(
+    state: &AppState,
+    app: &AppHandle,
+    module_type: HistoryModuleType,
+    paths: Vec<String>,
+    total_files: usize,
+    groups_found: Option<usize>,
+    duplicates_found: Option<usize>,
+    potential_savings: Option<u64>,
+    duration_ms: u64,
+    status: ScanStatus,
+) -> Result<(), String> {
+    get_or_init_history(state, app)?;
+
+    let history = state.history.lock().map_err(|e| e.to_string())?;
+    let repo = history.as_ref().ok_or("History repository not initialized")?;
+
+    let entry = ScanHistoryEntry {
+        id: HistoryRepository::generate_id(),
+        module_type,
+        scan_time: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64,
+        paths,
+        settings: "{}".to_string(),
+        total_files,
+        groups_found,
+        duplicates_found,
+        potential_savings,
+        duration_ms,
+        status,
+    };
+
+    repo.save_scan(&entry)
 }

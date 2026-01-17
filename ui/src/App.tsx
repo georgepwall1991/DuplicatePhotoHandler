@@ -10,12 +10,17 @@ import { ScreenshotScanView } from './components/ScreenshotScanView'
 import { LargeFilesView } from './components/LargeFilesView'
 import { LargeFileScanView } from './components/LargeFileScanView'
 import { OrganizeView } from './components/OrganizeView'
+import { UnorganizedScanView } from './components/UnorganizedScanView'
+import { UnorganizedView } from './components/UnorganizedView'
+import { SimilarScanView } from './components/SimilarScanView'
+import { SimilarView } from './components/SimilarView'
+import { HistoryView } from './components/HistoryView'
 import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
 
 export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
-import type { AppState, ScanResult, WatcherEvent, ActiveModule, ScreenshotScanResult, LargeFileScanResult } from './lib/types'
+import type { AppState, ScanResult, WatcherEvent, ActiveModule, ScreenshotScanResult, LargeFileScanResult, UnorganizedResult, SimilarResult } from './lib/types'
 
 function AppContent() {
   const [appState, setAppState] = useState<AppState>('idle')
@@ -27,11 +32,18 @@ function AppContent() {
   const [largeFileResults, setLargeFileResults] = useState<LargeFileScanResult | null>(null)
   const [largeFileAppState, setLargeFileAppState] = useState<AppState>('idle')
   const [largeFileProgress, setLargeFileProgress] = useState({ phase: '', percent: 0, message: '' })
+  const [unorganizedResults, setUnorganizedResults] = useState<UnorganizedResult | null>(null)
+  const [unorganizedAppState, setUnorganizedAppState] = useState<AppState>('idle')
+  const [unorganizedProgress, setUnorganizedProgress] = useState({ phase: '', percent: 0, message: '' })
+  const [similarResults, setSimilarResults] = useState<SimilarResult | null>(null)
+  const [similarAppState, setSimilarAppState] = useState<AppState>('idle')
+  const [similarProgress, setSimilarProgress] = useState({ phase: '', percent: 0, message: '' })
   const [isWatching, setIsWatching] = useState(false)
   const [watchedPaths, setWatchedPaths] = useState<string[]>([])
   const [scannedPaths, setScannedPaths] = useState<string[]>([])
   const [showSettings, setShowSettings] = useState(false)
   const [activeModule, setActiveModule] = useState<ActiveModule>('duplicates')
+  const [organizePaths, setOrganizePaths] = useState<string[]>([])
   const { showToast } = useToast()
   const watcherUnlistenRef = useRef<(() => void) | null>(null)
 
@@ -97,10 +109,21 @@ function AppContent() {
     } else if (activeModule === 'large') {
       setLargeFileResults(null)
       setLargeFileAppState('idle')
+    } else if (activeModule === 'unorganized') {
+      setUnorganizedResults(null)
+      setUnorganizedAppState('idle')
+    } else if (activeModule === 'similar') {
+      setSimilarResults(null)
+      setSimilarAppState('idle')
     } else {
       setResults(null)
       setAppState('idle')
     }
+  }
+
+  const handleSimilarScanComplete = (result: SimilarResult) => {
+    setSimilarResults(result)
+    setSimilarAppState('results')
   }
 
   const handleScreenshotScanComplete = (result: ScreenshotScanResult) => {
@@ -111,6 +134,11 @@ function AppContent() {
   const handleLargeFileScanComplete = (result: LargeFileScanResult) => {
     setLargeFileResults(result)
     setLargeFileAppState('results')
+  }
+
+  const handleUnorganizedScanComplete = (result: UnorganizedResult) => {
+    setUnorganizedResults(result)
+    setUnorganizedAppState('results')
   }
 
   return (
@@ -329,6 +357,130 @@ function AppContent() {
             </>
           )}
 
+          {/* Unorganized Module */}
+          {activeModule === 'unorganized' && (
+            <>
+              {unorganizedAppState === 'idle' && (
+                <motion.div
+                  key="unorganized-idle"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <UnorganizedScanView
+                    onScanStart={() => setUnorganizedAppState('scanning')}
+                    onScanComplete={handleUnorganizedScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setUnorganizedProgress}
+                  />
+                </motion.div>
+              )}
+
+              {unorganizedAppState === 'scanning' && (
+                <motion.div
+                  key="unorganized-scanning"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <UnorganizedScanView
+                    isScanning
+                    progress={unorganizedProgress}
+                    onScanStart={() => {}}
+                    onScanComplete={handleUnorganizedScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setUnorganizedProgress}
+                  />
+                </motion.div>
+              )}
+
+              {unorganizedAppState === 'results' && unorganizedResults && (
+                <motion.div
+                  key="unorganized-results"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.5, ease: "circOut" }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <UnorganizedView
+                    results={unorganizedResults}
+                    onNewScan={handleNewScan}
+                    onOrganize={(paths) => {
+                      // Store paths and navigate to organize module
+                      setOrganizePaths(paths)
+                      setActiveModule('organize')
+                      showToast(`${paths.length} folder(s) pre-selected for organization`, 'success')
+                    }}
+                  />
+                </motion.div>
+              )}
+            </>
+          )}
+
+          {/* Similar Photos Module */}
+          {activeModule === 'similar' && (
+            <>
+              {similarAppState === 'idle' && (
+                <motion.div
+                  key="similar-idle"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <SimilarScanView
+                    onScanStart={() => setSimilarAppState('scanning')}
+                    onScanComplete={handleSimilarScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setSimilarProgress}
+                  />
+                </motion.div>
+              )}
+
+              {similarAppState === 'scanning' && (
+                <motion.div
+                  key="similar-scanning"
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4 }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <SimilarScanView
+                    isScanning
+                    progress={similarProgress}
+                    onScanStart={() => {}}
+                    onScanComplete={handleSimilarScanComplete}
+                    onScanCancel={handleNewScan}
+                    onProgress={setSimilarProgress}
+                  />
+                </motion.div>
+              )}
+
+              {similarAppState === 'results' && similarResults && (
+                <motion.div
+                  key="similar-results"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.5, ease: "circOut" }}
+                  className="flex-1 glass-strong overflow-hidden shadow-2xl"
+                >
+                  <SimilarView
+                    results={similarResults}
+                    onNewScan={handleNewScan}
+                  />
+                </motion.div>
+              )}
+            </>
+          )}
+
           {/* Organize Module */}
           {activeModule === 'organize' && (
             <motion.div
@@ -339,7 +491,21 @@ function AppContent() {
               transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
               className="flex-1 glass-strong overflow-hidden shadow-2xl"
             >
-              <OrganizeView />
+              <OrganizeView initialPaths={organizePaths} />
+            </motion.div>
+          )}
+
+          {/* History Module */}
+          {activeModule === 'history' && (
+            <motion.div
+              key="history"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+              className="flex-1 glass-strong overflow-hidden shadow-2xl"
+            >
+              <HistoryView />
             </motion.div>
           )}
         </AnimatePresence>

@@ -15,6 +15,7 @@ interface OrganizeConfigViewProps {
     operation: OperationMode
   }) => void
   isLoading?: boolean
+  initialPaths?: string[]
 }
 
 const STRUCTURE_OPTIONS: { value: FolderStructure; label: string; example: string }[] = [
@@ -23,8 +24,8 @@ const STRUCTURE_OPTIONS: { value: FolderStructure; label: string; example: strin
   { value: 'year_month_flat', label: 'Year-Month (flat)', example: '2024-01/' },
 ]
 
-export function OrganizeConfigView({ onStartPreview, isLoading = false }: OrganizeConfigViewProps) {
-  const [sourcePaths, setSourcePaths] = useState<string[]>([])
+export function OrganizeConfigView({ onStartPreview, isLoading = false, initialPaths = [] }: OrganizeConfigViewProps) {
+  const [sourcePaths, setSourcePaths] = useState<string[]>(initialPaths)
   const [destination, setDestination] = useState<string>('')
   const [structure, setStructure] = useState<FolderStructure>('year_month')
   const [operation, setOperation] = useState<OperationMode>('copy')

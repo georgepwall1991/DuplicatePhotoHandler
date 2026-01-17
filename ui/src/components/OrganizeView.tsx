@@ -17,7 +17,11 @@ import type {
 
 type ViewState = 'config' | 'scanning' | 'preview' | 'executing' | 'result'
 
-export function OrganizeView() {
+interface OrganizeViewProps {
+  initialPaths?: string[]
+}
+
+export function OrganizeView({ initialPaths }: OrganizeViewProps) {
   const [viewState, setViewState] = useState<ViewState>('config')
   const [plan, setPlan] = useState<OrganizePlan | null>(null)
   const [result, setResult] = useState<OrganizeResult | null>(null)
@@ -97,7 +101,7 @@ export function OrganizeView() {
 
   // Render based on state
   if (viewState === 'config') {
-    return <OrganizeConfigView onStartPreview={handleStartPreview} />
+    return <OrganizeConfigView onStartPreview={handleStartPreview} initialPaths={initialPaths} />
   }
 
   if (viewState === 'scanning') {

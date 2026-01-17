@@ -104,7 +104,67 @@ export interface LargeFileScanResult {
 }
 
 // Module routing
-export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize'
+export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized' | 'similar' | 'history'
+
+// Similar Photos types
+export interface SimilarConfig {
+  source_paths: string[]
+  min_distance: number
+  max_distance: number
+  algorithm: string | null
+}
+
+export interface SimilarPhoto {
+  path: string
+  distance: number
+  similarity_percent: number
+  match_type: string
+  size_bytes: number
+}
+
+export interface SimilarGroup {
+  id: string
+  reference: string
+  reference_size_bytes: number
+  similar_photos: SimilarPhoto[]
+  average_similarity: number
+  total_size_bytes: number
+}
+
+export interface SimilarResult {
+  groups: SimilarGroup[]
+  total_photos_scanned: number
+  similar_groups_found: number
+  similar_photos_found: number
+  duration_ms: number
+}
+
+export interface SimilarProgress {
+  phase: string
+  current: number
+  total: number
+}
+
+// Scan History types
+export type HistoryModuleType = 'duplicates' | 'screenshots' | 'similar' | 'large_files' | 'unorganized'
+
+export interface ScanHistoryEntry {
+  id: string
+  module_type: HistoryModuleType
+  scan_time: number  // Unix timestamp
+  paths: string[]
+  total_files: number
+  groups_found: number | null
+  duplicates_found: number | null
+  potential_savings: number | null
+  duration_ms: number
+  status: 'completed' | 'cancelled' | 'error'
+}
+
+export interface ScanHistoryResult {
+  entries: ScanHistoryEntry[]
+  total_count: number
+}
 
 // Organization types
 export type FolderStructure = 'year_month' | 'year_month_day' | 'year_month_flat'
@@ -156,4 +216,45 @@ export interface OrganizeProgress {
   current: number
   total: number
   current_file: string
+}
+
+// Unorganized file types
+export type UnorganizedReason = 'in_root' | 'shallow_folder' | 'no_date_pattern' | 'generic_name'
+
+export interface UnorganizedFile {
+  path: string
+  filename: string
+  size_bytes: number
+  file_type: string
+  reasons: UnorganizedReason[]
+  folder_depth: number
+  parent_folder: string
+}
+
+export interface UnorganizedConfig {
+  source_paths: string[]
+  check_root: boolean
+  check_date_pattern: boolean
+  check_generic_names: boolean
+  min_depth: number
+}
+
+export interface ReasonSummary {
+  reason: UnorganizedReason
+  count: number
+  size_bytes: number
+}
+
+export interface UnorganizedResult {
+  files: UnorganizedFile[]
+  total_files: number
+  total_size_bytes: number
+  by_reason: ReasonSummary[]
+  duration_ms: number
+}
+
+export interface UnorganizedProgress {
+  phase: string
+  files_scanned: number
+  message: string
 }
