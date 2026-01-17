@@ -672,7 +672,7 @@ pub async fn scan_screenshots(
     config: ScanConfig,
 ) -> Result<ScreenshotScanResultDto, String> {
     use duplicate_photo_cleaner::core::metadata::extract_metadata;
-    use duplicate_photo_cleaner::core::scanner::WalkDirScanner;
+    use duplicate_photo_cleaner::core::scanner::{PhotoScanner, WalkDirScanner};
     use duplicate_photo_cleaner::core::screenshot::is_screenshot;
     use std::time::Instant;
 
@@ -773,11 +773,8 @@ pub async fn scan_screenshots(
         {
             Ok(Ok(result)) => {
                 let groups: Vec<DuplicateGroupDto> = result.groups.iter().map(DuplicateGroupDto::from).collect();
-                let dup_count: usize = groups.iter().map(|g| g.photos.len().saturating_sub(1)).sum();
-                let savings: u64 = groups.iter()
-                    .flat_map(|g| g.photos.iter().skip(1))
-                    .map(|p| p.size)
-                    .sum();
+                let dup_count: usize = groups.iter().map(|g| g.duplicate_count).sum();
+                let savings: u64 = groups.iter().map(|g| g.duplicate_size_bytes).sum();
                 (groups, dup_count, savings)
             }
             Ok(Err(e)) => {
