@@ -114,7 +114,7 @@ export function HistoryView() {
         </div>
 
         <EmptyState
-          icon="📜"
+          icon={History}
           title="No Scan History"
           message="Your scan history will appear here after running scans."
         />

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { invoke, open, save } from '../lib/tauri'
+import { invoke, save } from '../lib/tauri'
 import {
   Search,
   Download,
@@ -18,7 +18,7 @@ import type { ScanResult, ExportResult } from '../lib/types'
 
 export type SortOption = 'size' | 'photos' | 'type'
 export type FilterOption = 'all' | 'exact' | 'near' | 'similar'
-export type SelectionStrategy = 'duplicates' | 'keepHighestRes' | 'keepMostRecent' | 'keepOldest' | 'keepLargest' | 'keepSharpest'
+export type SelectionStrategy = 'duplicates' | 'keepHighestRes' | 'keepMostRecent' | 'keepOldest' | 'keepLargest' | 'keepSharpest' | 'keepRaw' | 'keepMostMetadata' | 'aiComposite'
 
 interface ResultsHeaderProps {
   results: ScanResult
@@ -164,11 +164,14 @@ export function ResultsHeader({
                   className="absolute right-0 top-full mt-3 w-64 glass-strong p-3 shadow-2xl z-50 border border-white/10"
                 >
                   {[
-                    { id: 'duplicates', label: 'Recommended', sub: 'AI choice for each group' },
+                    { id: 'aiComposite', label: 'AI Best Pick', sub: 'Multi-factor quality analysis', highlight: true },
+                    { id: 'duplicates', label: 'Select All Duplicates', sub: 'Pick one, delete the rest' },
                     { id: 'keepHighestRes', label: 'Highest Resolution', sub: 'Keep most detailed' },
                     { id: 'keepLargest', label: 'Largest Size', sub: 'Keep heaviest files' },
                     { id: 'keepSharpest', label: 'Maximum Sharpness', sub: 'Avoid motion blur' },
-                    { id: 'keepOldest', label: 'Chronological', sub: 'Keep original file' },
+                    { id: 'keepRaw', label: 'Keep RAW Format', sub: 'Prioritize ARW/CR2/NEF' },
+                    { id: 'keepMostMetadata', label: 'Most Metadata', sub: 'Preserve EXIF data' },
+                    { id: 'keepOldest', label: 'Keep Original', sub: 'Oldest file date' },
                   ].map((strategy) => (
                     <button
                       key={strategy.id}
@@ -176,9 +179,11 @@ export function ResultsHeader({
                         onAutoSelect(strategy.id as SelectionStrategy)
                         setShowAutoSelectMenu(false)
                       }}
-                      className="w-full p-3 text-left hover:bg-white/5 transition-colors group"
+                      className={`w-full p-3 text-left hover:bg-white/5 transition-colors group ${'highlight' in strategy && strategy.highlight ? 'bg-brand-primary/5 border-l-2 border-brand-primary' : ''
+                        }`}
                     >
-                      <div className="text-[10px] font-black uppercase tracking-widest text-white mb-0.5 group-hover:text-brand-primary">
+                      <div className={`text-[10px] font-black uppercase tracking-widest mb-0.5 group-hover:text-brand-primary ${'highlight' in strategy && strategy.highlight ? 'text-brand-primary' : 'text-white'
+                        }`}>
                         {strategy.label}
                       </div>
                       <div className="text-[10px] text-text-muted font-medium">{strategy.sub}</div>
@@ -296,8 +301,8 @@ export function ResultsHeader({
           <button
             onClick={onToggleErrors}
             className={`flex items-center gap-2 px-5 py-3 transition-all ${showErrors
-                ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
-                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20'
+              ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
+              : 'bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20'
               } text-[10px] font-black uppercase tracking-widest`}
           >
             <AlertCircle className="w-4 h-4" />

@@ -8,7 +8,6 @@ import {
   Settings,
   Search,
   Zap,
-  Activity,
   ChevronRight,
   Command,
   FolderSearch,
@@ -39,7 +38,7 @@ const formatBytes = (bytes: number): string => {
 
 // Type guard to check if an item id is a valid ActiveModule
 const isActiveModule = (id: string): id is ActiveModule => {
-  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize' || id === 'unorganized' || id === 'similar' || id === 'history'
+  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize' || id === 'unorganized' || id === 'similar' || id === 'history' || id === 'master'
 }
 
 export function Sidebar({
@@ -48,20 +47,17 @@ export function Sidebar({
   onNewScan,
   potentialSavings,
   isWatching,
-  watchedPaths,
+  watchedPaths: _watchedPaths,
   onToggleWatch,
   onOpenSettings
 }: SidebarProps) {
   const guardEnabled = Boolean(isWatching)
-  const guardedCount = watchedPaths?.length ?? 0
-  const guardedLabel = guardEnabled
-    ? `${guardedCount} folder${guardedCount === 1 ? '' : 's'} armed`
-    : 'No folders armed'
 
   const groups = [
     {
       label: 'Library',
       items: [
+        { id: 'master', name: 'Full Library Guard', hint: 'Scan everything', icon: ShieldCheck, available: true, highlight: true },
         { id: 'duplicates', name: 'Duplicates', hint: 'Exact matches', icon: Layers, available: true },
         { id: 'similar', name: 'Similar Photos', hint: 'Near matches', icon: Images, available: true },
         { id: 'history', name: 'Scan History', hint: 'Recent sessions', icon: History, available: true }
@@ -91,7 +87,7 @@ export function Sidebar({
               </div>
             </div>
             <div>
-              <h1 className="text-lg font-bold text-white tracking-tight leading-none">Duplicate<br /><span className="text-brand-accent">Studio</span></h1>
+              <h1 className="text-lg font-bold text-white tracking-tight leading-none">Pixel<br /><span className="text-brand-accent">lift</span></h1>
             </div>
           </div>
           <div className={`
@@ -143,6 +139,7 @@ export function Sidebar({
               {group.items.map(item => {
                 const Icon = item.icon
                 const isActive = item.id === activeModule
+                const isHighlight = 'highlight' in item && item.highlight
 
                 return (
                   <button
@@ -150,12 +147,14 @@ export function Sidebar({
                     onClick={() => isActiveModule(item.id) && onModuleChange(item.id)}
                     className={`
                          w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all
-                         ${isActive
-                        ? 'bg-brand-primary/10 text-brand-primary'
-                        : 'text-text-secondary hover:text-white hover:bg-white/5'}
+                         ${isHighlight && !isActive
+                        ? 'bg-gradient-to-r from-brand-accent/10 to-brand-primary/10 border border-brand-accent/20 text-brand-accent hover:from-brand-accent/20 hover:to-brand-primary/20'
+                        : isActive
+                          ? 'bg-brand-primary/10 text-brand-primary'
+                          : 'text-text-secondary hover:text-white hover:bg-white/5'}
                        `}
                   >
-                    <Icon className={`h-4 w-4 ${isActive ? 'text-brand-primary' : 'text-current opacity-70'}`} />
+                    <Icon className={`h-4 w-4 ${isHighlight && !isActive ? 'text-brand-accent' : isActive ? 'text-brand-primary' : 'text-current opacity-70'}`} />
                     <span className="font-medium text-sm">{item.name}</span>
                     {isActive && <motion.div layoutId="active-nav" className="ml-auto w-1 h-1 rounded-full bg-brand-primary shadow-[0_0_8px_currentColor]" />}
                   </button>

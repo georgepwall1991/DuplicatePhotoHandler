@@ -1,5 +1,6 @@
 import { ScreenshotCard } from './ScreenshotCard'
 import { EmptyState } from './EmptyState'
+import { Camera } from 'lucide-react'
 import type { ScreenshotInfo } from '../lib/types'
 
 interface ScreenshotGridProps {
@@ -18,7 +19,7 @@ export function ScreenshotGrid({
   if (screenshots.length === 0) {
     return (
       <EmptyState
-        icon="📸"
+        icon={Camera}
         title="No Screenshots Found"
         message="No screenshots detected in the selected folder"
       />

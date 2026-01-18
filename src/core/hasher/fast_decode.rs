@@ -7,6 +7,7 @@ use crate::error::HashError;
 use image::{DynamicImage, ImageBuffer, Luma, Rgb, Rgba};
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 use zune_core::colorspace::ColorSpace;
 use zune_core::options::DecoderOptions;
 use zune_jpeg::JpegDecoder;
@@ -46,12 +47,14 @@ impl FastDecoder {
     /// Decode an image from a file path using the fastest available decoder.
     ///
     /// - JPEG: Uses zune-jpeg (1.5-2x faster)
+    /// - HEIC/HEIF: Uses libheif-rs (native support for iPhone photos)
     /// - Other formats: Falls back to image crate
     pub fn decode(path: &Path) -> Result<DynamicImage, HashError> {
         let format = ImageFormat::from_path(path);
 
         match format {
             ImageFormat::Jpeg => Self::decode_jpeg(path).or_else(|_| Self::decode_fallback(path)),
+            ImageFormat::Heic => Self::decode_heic(path).or_else(|_| Self::decode_fallback(path)),
             _ => Self::decode_fallback(path),
         }
     }
@@ -123,6 +126,66 @@ impl FastDecoder {
         };
 
         Ok(image)
+    }
+
+    /// Native HEIC/HEIF decoding using macOS sips command
+    /// This uses the built-in macOS image conversion tool which natively supports HEIC
+    #[cfg(target_os = "macos")]
+    fn decode_heic(path: &Path) -> Result<DynamicImage, HashError> {
+        // Create a temporary file for the converted JPEG
+        let temp_path = std::env::temp_dir().join(format!(
+            "pixelift_heic_{}.jpg",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+
+        // Use macOS sips command to convert HEIC to JPEG
+        let output = Command::new("sips")
+            .args([
+                "-s",
+                "format",
+                "jpeg",
+                path.to_str().unwrap_or_default(),
+                "--out",
+                temp_path.to_str().unwrap_or_default(),
+            ])
+            .output()
+            .map_err(|e| HashError::DecodeError {
+                path: path.to_path_buf(),
+                reason: format!("Failed to run sips: {}", e),
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Clean up temp file on failure
+            let _ = fs::remove_file(&temp_path);
+            return Err(HashError::DecodeError {
+                path: path.to_path_buf(),
+                reason: format!("sips conversion failed: {}", stderr),
+            });
+        }
+
+        // Read the converted JPEG
+        let result = image::open(&temp_path).map_err(|e| HashError::DecodeError {
+            path: path.to_path_buf(),
+            reason: format!("Failed to read converted HEIC: {}", e),
+        });
+
+        // Clean up temp file
+        let _ = fs::remove_file(&temp_path);
+
+        result
+    }
+
+    /// Fallback for non-macOS platforms - HEIC not supported
+    #[cfg(not(target_os = "macos"))]
+    fn decode_heic(path: &Path) -> Result<DynamicImage, HashError> {
+        Err(HashError::DecodeError {
+            path: path.to_path_buf(),
+            reason: "HEIC decoding is only supported on macOS".to_string(),
+        })
     }
 
     /// Fallback to image crate for non-JPEG formats

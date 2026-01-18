@@ -40,7 +40,7 @@ export function ScanProgress({
 
       {/* Main Scanner */}
       <div className="relative mb-16">
-        <ProgressRing percent={percent} size={280} strokeWidth={10} />
+        <ProgressRing progress={percent} size={280} strokeWidth={10} />
       </div>
 
       {/* Status Console */}

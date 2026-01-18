@@ -378,8 +378,8 @@ export function SettingsModal({ isOpen, onClose, onCacheCleared }: SettingsModal
                             <Zap className="h-10 w-10 text-white" />
                           </div>
                         </div>
-                        <h3 className="mt-6 text-xl font-bold text-white">Duplicate Studio</h3>
-                        <p className="mt-1 text-sm text-slate-400">Version 2.4.0</p>
+                        <h3 className="mt-6 text-xl font-bold text-white">Pixelift</h3>
+                        <p className="mt-1 text-sm text-slate-400">Version 1.0.0</p>
                       </div>
 
                       {/* Credits */}

@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { invoke } from '../lib/tauri'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 import type { ScanResult, FileInfo, QualityScore } from '../lib/types'
 import { DuplicateGroupCard } from './DuplicateGroupCard'
 import { ImagePreview } from './ImagePreview'
 import { ComparisonView } from './ComparisonView'
 import { ShortcutsHelp } from './ShortcutsHelp'
-import { Search, Check, Keyboard } from 'lucide-react'
+import { BeforeAfter } from './BeforeAfter'
+import { Search, Check, Keyboard, ChevronDown } from 'lucide-react'
 import { ResultsHeader, type SortOption, type FilterOption, type SelectionStrategy } from './ResultsHeader'
 import { ResultsSummary } from './ResultsSummary'
 import { ActionBar } from './ActionBar'
@@ -67,6 +69,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [lastTrashedFiles, setLastTrashedFiles] = useState<string[]>([])
   const [isRestoring, setIsRestoring] = useState(false)
+  const [showImpact, setShowImpact] = useState(true)
   const { showToast } = useToast()
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -113,7 +116,11 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     }
 
     // For other strategies, we need file info or quality scores
-    showToast(strategy === 'keepSharpest' ? 'Analyzing sharpness...' : 'Analyzing photos...', 'info')
+    const analysisMessage = strategy === 'keepSharpest' ? 'Analyzing sharpness...'
+      : strategy === 'aiComposite' ? 'Running AI analysis...'
+        : strategy === 'keepMostMetadata' ? 'Checking EXIF data...'
+          : 'Analyzing photos...'
+    showToast(analysisMessage, 'info')
 
     const toDelete = new Set<string>()
 
@@ -121,13 +128,13 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       if (group.photos.length < 2) continue
 
       try {
-        if (strategy === 'keepSharpest') {
+        if (strategy === 'keepSharpest' || strategy === 'aiComposite') {
           // Fetch quality scores for all photos in the group
           const scores = await Promise.all(
             group.photos.map(path => invoke<QualityScore>('get_quality_score', { path }))
           )
 
-          // Find the sharpest photo (highest overall quality score)
+          // Find the best photo based on quality score
           let bestIdx = 0
           for (let i = 1; i < scores.length; i++) {
             if (scores[i].overall > scores[bestIdx].overall) {
@@ -135,10 +142,56 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
             }
           }
 
-          // Select all except the sharpest for deletion
+          // Select all except the best for deletion
           scores.forEach((score, idx) => {
             if (idx !== bestIdx) {
               toDelete.add(score.path)
+            }
+          })
+        } else if (strategy === 'keepRaw') {
+          // Prioritize RAW formats: ARW, CR2, NEF, DNG, RAF, ORF, RW2
+          const rawExtensions = ['.arw', '.cr2', '.cr3', '.nef', '.dng', '.raf', '.orf', '.rw2', '.raw']
+
+          // Find if there's a RAW file in the group
+          let rawIdx = -1
+          for (let i = 0; i < group.photos.length; i++) {
+            const ext = group.photos[i].toLowerCase().slice(group.photos[i].lastIndexOf('.'))
+            if (rawExtensions.includes(ext)) {
+              rawIdx = i
+              break
+            }
+          }
+
+          // If no RAW found, fall back to representative
+          const keepIdx = rawIdx >= 0 ? rawIdx : group.photos.indexOf(group.representative)
+          group.photos.forEach((photo, idx) => {
+            if (idx !== keepIdx) {
+              toDelete.add(photo)
+            }
+          })
+        } else if (strategy === 'keepMostMetadata') {
+          // Fetch file info to check for metadata (using file size as a proxy - larger files often have more metadata)
+          const infos = await Promise.all(
+            group.photos.map(path => invoke<FileInfo>('get_file_info', { path }))
+          )
+
+          // Find the file with most metadata (largest size as proxy, or check dimensions)
+          let bestIdx = 0
+          for (let i = 1; i < infos.length; i++) {
+            // Prefer files with dimensions info (indicates metadata read)
+            const hasDimensions = infos[i].dimensions !== null
+            const bestHasDimensions = infos[bestIdx].dimensions !== null
+
+            if (hasDimensions && !bestHasDimensions) {
+              bestIdx = i
+            } else if (hasDimensions === bestHasDimensions && infos[i].size_bytes > infos[bestIdx].size_bytes) {
+              bestIdx = i
+            }
+          }
+
+          infos.forEach((info, idx) => {
+            if (idx !== bestIdx) {
+              toDelete.add(info.path)
             }
           })
         } else {
@@ -192,6 +245,9 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
       keepOldest: 'newer',
       keepMostRecent: 'older',
       keepSharpest: 'blurrier',
+      keepRaw: 'non-RAW',
+      keepMostMetadata: 'less metadata',
+      aiComposite: 'lower quality',
     }
     showToast(`Selected ${toDelete.size} ${strategyNames[strategy]} files for deletion`, 'info')
   }, [results.groups, showToast])
@@ -404,6 +460,24 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     }
   }, [focusedIndex])
 
+  // Virtual scrolling configuration
+  const rowVirtualizer = useVirtualizer({
+    count: filteredAndSortedGroups.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: (index) => {
+      // Estimate row height - expanded cards are taller
+      const group = filteredAndSortedGroups[index]
+      const isExpanded = expandedGroups.has(group?.id)
+      return isExpanded ? 400 : 180
+    },
+    overscan: 5,
+  })
+
+  // Re-measure when expanded groups change
+  useEffect(() => {
+    rowVirtualizer.measure()
+  }, [expandedGroups, rowVirtualizer])
+
   const renderContent = () => {
     if (filteredAndSortedGroups.length === 0) {
       const isFiltered = results.groups.length > 0
@@ -417,29 +491,43 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
     }
 
     return (
-      <div className="space-y-4 pb-32">
-        <AnimatePresence>
-          {filteredAndSortedGroups.map((group, index) => (
-            <motion.div
+      <div
+        className="relative w-full"
+        style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const group = filteredAndSortedGroups[virtualRow.index]
+          return (
+            <div
               key={group.id}
               data-group-card
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(index * 0.05, 0.5) }}
+              data-index={virtualRow.index}
+              className="absolute left-0 right-0 px-0"
+              style={{
+                top: `${virtualRow.start}px`,
+                height: `${virtualRow.size}px`,
+              }}
             >
-              <DuplicateGroupCard
-                group={group}
-                selectedFiles={selectedFiles}
-                onToggleFile={toggleFile}
-                onPreviewImage={setPreviewImage}
-                onCompare={handleCompare}
-                isFocused={focusedIndex === index}
-                isExpanded={expandedGroups.has(group.id)}
-                onToggleExpand={() => toggleGroupExpanded(group.id)}
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="pb-4"
+              >
+                <DuplicateGroupCard
+                  group={group}
+                  selectedFiles={selectedFiles}
+                  onToggleFile={toggleFile}
+                  onPreviewImage={setPreviewImage}
+                  onCompare={handleCompare}
+                  isFocused={focusedIndex === virtualRow.index}
+                  isExpanded={expandedGroups.has(group.id)}
+                  onToggleExpand={() => toggleGroupExpanded(group.id)}
+                />
+              </motion.div>
+            </div>
+          )
+        })}
       </div>
     )
   }
@@ -472,6 +560,36 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
           potentialSavingsBytes={results.potential_savings_bytes}
         />
       </div>
+
+      {/* Impact Visualization */}
+      {results.duplicate_groups > 0 && (
+        <div className="px-6 pb-4">
+          <button
+            onClick={() => setShowImpact(!showImpact)}
+            className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted hover:text-white transition-colors mb-3"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform ${showImpact ? 'rotate-180' : ''}`} />
+            {showImpact ? 'Hide' : 'Show'} Cleanup Impact
+          </button>
+          <AnimatePresence>
+            {showImpact && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <BeforeAfter
+                  totalPhotos={results.total_photos}
+                  duplicateCount={results.groups.reduce((acc, g) => acc + g.photos.length - 1, 0)}
+                  totalSize={results.total_photos * 5000000}
+                  reclaimableSize={results.potential_savings_bytes}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
 
       {/* Results list */}
       <div ref={containerRef} className="flex-1 overflow-auto p-6 pb-32 custom-scrollbar scroll-shadow">

@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Photo Dedup",
+  "productName": "Pixelift",
   "version": "0.1.0",
-  "identifier": "com.photodedup.app",
+  "identifier": "com.pixelift.app",
   "build": {
     "frontendDist": "../ui/dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Photo Dedup",
+        "title": "Pixelift",
         "width": 1000,
         "height": 700,
         "minWidth": 800,
@@ -46,8 +46,8 @@
       "icons/icon.ico"
     ],
     "category": "Utility",
-    "shortDescription": "Find and remove duplicate photos",
-    "longDescription": "A trustworthy duplicate photo finder that explains why photos are duplicates and never auto-deletes."
+    "shortDescription": "Elevate your photo library",
+    "longDescription": "Pixelift uses state-of-the-art perceptual hashing to find and eliminate duplicate photos with surgical precision. Never auto-deletes — you're always in control."
   },
   "plugins": {
     "shell": {

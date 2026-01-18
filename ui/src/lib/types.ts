@@ -104,7 +104,52 @@ export interface LargeFileScanResult {
 }
 
 // Module routing
-export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized' | 'similar' | 'history'
+export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized' | 'similar' | 'history' | 'master'
+
+// Master Scan types
+export type MasterScanModule = 'duplicates' | 'similar' | 'large' | 'screenshots' | 'unorganized'
+
+export interface MasterScanConfig {
+  paths: string[]
+  enabled_modules: MasterScanModule[]
+  // Per-module settings
+  duplicate_threshold?: number
+  duplicate_algorithm?: string
+  similar_min_distance?: number
+  similar_max_distance?: number
+  large_file_threshold?: number
+}
+
+export interface MasterModuleResult {
+  module: MasterScanModule
+  status: 'pending' | 'running' | 'completed' | 'error'
+  progress: number
+  error?: string
+  // Module-specific counts
+  items_found?: number
+  groups_found?: number
+  savings_bytes?: number
+}
+
+export interface MasterScanResult {
+  duplicates?: ScanResult
+  similar?: SimilarResult
+  large?: LargeFileScanResult
+  screenshots?: ScreenshotScanResult
+  unorganized?: UnorganizedResult
+  total_items_found: number
+  total_savings_bytes: number
+  duration_ms: number
+}
+
+export interface MasterScanProgress {
+  current_module: MasterScanModule | null
+  modules_completed: MasterScanModule[]
+  modules_pending: MasterScanModule[]
+  overall_percent: number
+  current_module_percent: number
+  message: string
+}
 
 // Similar Photos types
 export interface SimilarConfig {

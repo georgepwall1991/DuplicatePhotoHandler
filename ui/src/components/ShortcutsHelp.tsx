@@ -1,4 +1,3 @@
-import { useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Keyboard, X } from 'lucide-react'
 
@@ -66,6 +65,7 @@ export function ShortcutsHelp({ isOpen, onClose }: ShortcutsHelpProps) {
                                     <ShortcutSection title="Actions">
                                         <ShortcutRow keys={['Delete']} label="Move to Trash" />
                                         <ShortcutRow keys={['Cmd', 'Z']} label="Undo Last Trash" />
+                                        <ShortcutRow keys={['Cmd', 'Shift', 'Z']} label="Redo Trash" />
                                         <ShortcutRow keys={['/']} label="Focus Search" />
                                     </ShortcutSection>
 

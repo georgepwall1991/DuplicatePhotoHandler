@@ -9,6 +9,7 @@ import { ImagePreview } from './ImagePreview'
 import { ActionBar } from './ActionBar'
 import { ConfirmModal } from './ConfirmModal'
 import { EmptyState } from './EmptyState'
+import { Camera, Sparkles } from 'lucide-react'
 import { useToast } from './Toast'
 
 interface ScreenshotsViewProps {
@@ -145,7 +146,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
   if (!results) {
     return (
       <EmptyState
-        icon="📸"
+        icon={Camera}
         title="No Screenshot Data"
         message="Run a scan to find screenshots"
       />
@@ -161,7 +162,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     if (results.all_screenshots.length === 0) {
       return (
         <EmptyState
-          icon="📸"
+          icon={Camera}
           title="No Screenshots Found"
           message="No screenshots detected in the selected folder"
         />
@@ -182,7 +183,7 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
     if (results.duplicate_groups.length === 0) {
       return (
         <EmptyState
-          icon="✨"
+          icon={Sparkles}
           title="No Duplicate Screenshots"
           message="All screenshots are unique"
         />
@@ -227,11 +228,10 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
             aria-selected={activeTab === 'all'}
             aria-controls="all-screenshots-panel"
             onClick={() => setActiveTab('all')}
-            className={`pb-4 pt-2 font-medium text-sm transition-all relative ${
-              activeTab === 'all'
+            className={`pb-4 pt-2 font-medium text-sm transition-all relative ${activeTab === 'all'
                 ? 'text-white'
                 : 'text-gray-400 hover:text-gray-300'
-            }`}
+              }`}
           >
             All Screenshots
             {activeTab === 'all' && (
@@ -249,11 +249,10 @@ export function ScreenshotsView({ results, onNewScan }: ScreenshotsViewProps) {
             aria-selected={activeTab === 'duplicates'}
             aria-controls="duplicates-panel"
             onClick={() => setActiveTab('duplicates')}
-            className={`pb-4 pt-2 font-medium text-sm transition-all relative ${
-              activeTab === 'duplicates'
+            className={`pb-4 pt-2 font-medium text-sm transition-all relative ${activeTab === 'duplicates'
                 ? 'text-white'
                 : 'text-gray-400 hover:text-gray-300'
-            }`}
+              }`}
           >
             Duplicates
             {activeTab === 'duplicates' && (

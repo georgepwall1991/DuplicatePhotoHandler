@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { invoke, open } from '../lib/tauri'
 import { Sparkles, Activity, ShieldCheck, Cpu } from 'lucide-react'
+import { Tooltip } from './Tooltip'
 
 import type { ScanResult } from '../lib/types'
 import { ScanButton } from './ScanButton'
 import { ScanProgress } from './ScanProgress'
-import { FolderSelector } from './FolderSelector'
 import { SensitivitySlider } from './SensitivitySlider'
+import { AlgorithmSelector, type Algorithm } from './AlgorithmSelector'
+import { ScanProfiles, type ScanProfile } from './ScanProfiles'
 import { useScanEvents } from '../hooks/useScanEvents'
 
 interface ScanViewProps {
@@ -31,6 +33,7 @@ export function ScanView({
 }: ScanViewProps) {
   const [selectedPaths, setSelectedPaths] = useState<string[]>([])
   const [threshold, setThreshold] = useState(5)
+  const [algorithm, setAlgorithm] = useState<Algorithm>('difference')
   const [isCancelling, setIsCancelling] = useState(false)
 
   const { stats, resetStats } = useScanEvents({ onProgress })
@@ -67,6 +70,14 @@ export function ScanView({
     setIsCancelling(false)
   }
 
+  const handleLoadProfile = (profile: ScanProfile) => {
+    setAlgorithm(profile.algorithm)
+    setThreshold(profile.threshold)
+    if (profile.paths.length > 0) {
+      handlePathsChange(profile.paths)
+    }
+  }
+
   const handleStartScan = async () => {
     if (selectedPaths.length === 0) return
 
@@ -78,7 +89,7 @@ export function ScanView({
         config: {
           paths: selectedPaths,
           threshold,
-          algorithm: 'difference',
+          algorithm,
         },
       })
       onScanComplete(result)
@@ -116,7 +127,7 @@ export function ScanView({
             <span className="text-[10px] font-black uppercase tracking-[0.2em]">Next-Gen Intelligence</span>
           </div>
           <h2 className="text-5xl font-black text-white tracking-tighter mb-4">
-            Purify your <span className="bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">Library</span>
+            Elevate your <span className="bg-gradient-to-r from-brand-primary to-brand-secondary bg-clip-text text-transparent">Library</span>
           </h2>
           <p className="text-text-secondary font-medium max-w-sm mx-auto leading-relaxed">
             State-of-the-art perceptual hashing to find and eliminate duplicates with surgical precision.
@@ -129,26 +140,42 @@ export function ScanView({
             isReady={selectedPaths.length > 0}
             onClick={handleStartScan}
             onSelectFolder={handleSelectFolder}
+            onDropPaths={handlePathsChange}
           />
         </div>
 
-        {/* Configuration Grid */}
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Profiles Row */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="mb-8"
+        >
+          <ScanProfiles
+            currentAlgorithm={algorithm}
+            currentThreshold={threshold}
+            currentPaths={selectedPaths}
+            onLoadProfile={handleLoadProfile}
+          />
+        </motion.div>
+
+        {/* Configuration Grid - just Mode + Threshold (folder selection via button above) */}
+        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-6 max-w-lg mx-auto">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <FolderSelector
-              selectedPaths={selectedPaths}
-              onPathsChange={handlePathsChange}
+            <AlgorithmSelector
+              algorithm={algorithm}
+              onAlgorithmChange={setAlgorithm}
             />
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.15 }}
           >
             <SensitivitySlider
               threshold={threshold}
@@ -164,18 +191,24 @@ export function ScanView({
           transition={{ delay: 0.4 }}
           className="mt-12 flex items-center gap-8"
         >
-          <div className="flex items-center gap-2 text-text-muted">
-            <Activity className="w-4 h-4" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Real-time Stats</span>
-          </div>
-          <div className="flex items-center gap-2 text-text-muted">
-            <ShieldCheck className="w-4 h-4" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Non-Destructive</span>
-          </div>
-          <div className="flex items-center gap-2 text-text-muted">
-            <Cpu className="w-4 h-4" />
-            <span className="text-[10px] font-bold uppercase tracking-widest">LSH Accelerated</span>
-          </div>
+          <Tooltip content="Watch scan progress and duplicate counts update live as files are processed">
+            <div className="flex items-center gap-2 text-text-muted hover:text-text-secondary transition-colors">
+              <Activity className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Real-time Stats</span>
+            </div>
+          </Tooltip>
+          <Tooltip content="Files are never auto-deleted — you're always in control of what gets removed">
+            <div className="flex items-center gap-2 text-text-muted hover:text-text-secondary transition-colors">
+              <ShieldCheck className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">Non-Destructive</span>
+            </div>
+          </Tooltip>
+          <Tooltip content="Locality-Sensitive Hashing makes scans 250x faster for large libraries (500+ photos)">
+            <div className="flex items-center gap-2 text-text-muted hover:text-text-secondary transition-colors">
+              <Cpu className="w-4 h-4" />
+              <span className="text-[10px] font-bold uppercase tracking-widest">LSH Accelerated</span>
+            </div>
+          </Tooltip>
         </motion.div>
       </div>
     </div>

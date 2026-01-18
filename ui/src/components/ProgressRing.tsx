@@ -1,100 +1,66 @@
 import { motion } from 'framer-motion'
 
 interface ProgressRingProps {
-  percent: number
+  progress: number // 0-100
   size?: number
   strokeWidth?: number
+  color?: string
+  showPercent?: boolean
 }
 
 export function ProgressRing({
-  percent,
-  size = 200,
-  strokeWidth = 8,
+  progress,
+  size = 80,
+  strokeWidth = 6,
+  color = '#00D9FF',
+  showPercent = true,
 }: ProgressRingProps) {
   const radius = (size - strokeWidth) / 2
-  const circumference = radius * 2 * Math.PI
-  const offset = circumference - (percent / 100) * circumference
+  const circumference = 2 * Math.PI * radius
+  const strokeDashoffset = circumference - (progress / 100) * circumference
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
-      {/* Dynamic Background Glow */}
-      <motion.div
-        animate={{ 
-          opacity: [0.1, 0.3, 0.1],
-          scale: [1, 1.05, 1],
-        }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute inset-0  blur-3xl bg-purple-500/20"
-      />
-
-      <div className="absolute inset-0  border border-white/5 bg-[#0a0a0f]/40 backdrop-blur-md shadow-2xl" />
-
-      {/* SVG Ring */}
-      <svg className="absolute inset-0 -rotate-90" width={size} height={size}>
-        {/* Track */}
+      <svg width={size} height={size} className="transform -rotate-90">
+        {/* Background circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.03)"
+          stroke="rgba(255, 255, 255, 0.1)"
           strokeWidth={strokeWidth}
         />
-        
-        {/* Progress */}
+        {/* Progress circle */}
         <motion.circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="url(#progressGradient)"
+          stroke={color}
           strokeWidth={strokeWidth}
           strokeLinecap="round"
-          initial={{ strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
-          transition={{ type: "spring", stiffness: 50, damping: 20 }}
           strokeDasharray={circumference}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          style={{
+            filter: `drop-shadow(0 0 6px ${color})`,
+          }}
         />
-
-        <defs>
-          <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#818cf8" />
-            <stop offset="50%" stopColor="#a78bfa" />
-            <stop offset="100%" stopColor="#f472b6" />
-          </linearGradient>
-        </defs>
       </svg>
-
-      {/* Center Content */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <motion.div
-          key={Math.round(percent)}
-          initial={{ opacity: 0, scale: 0.8, y: 5 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          className="flex items-baseline"
-        >
-          <span className="text-6xl font-black text-white tracking-tighter">
-            {Math.round(percent)}
-          </span>
-          <span className="text-xl font-bold text-purple-400 ml-1">%</span>
-        </motion.div>
-        <motion.div 
-          animate={{ opacity: [0.4, 1, 0.4] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mt-1"
-        >
-          Processing
-        </motion.div>
-      </div>
-
-      {/* Scanning Radar Line */}
-      <motion.div 
-        animate={{ rotate: 360 }}
-        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-        className="absolute inset-0  pointer-events-none"
-      >
-        <div className="absolute top-0 left-1/2 w-0.5 h-1/2 bg-gradient-to-t from-transparent via-purple-500/50 to-white/80 origin-bottom" />
-      </motion.div>
+      {showPercent && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.span
+            key={Math.floor(progress)}
+            initial={{ scale: 1.2, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="text-lg font-black text-white"
+          >
+            {Math.floor(progress)}%
+          </motion.span>
+        </div>
+      )}
     </div>
   )
 }

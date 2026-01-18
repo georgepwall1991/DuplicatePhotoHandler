@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { invoke, listen } from './lib/tauri'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sidebar } from './components/Sidebar'
@@ -14,12 +14,14 @@ import { UnorganizedView } from './components/UnorganizedView'
 import { SimilarScanView } from './components/SimilarScanView'
 import { SimilarView } from './components/SimilarView'
 import { HistoryView } from './components/HistoryView'
+import { MasterScanView } from './components/MasterScanView'
+import { MasterResultsView } from './components/MasterResultsView'
 import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
 import './App.css'
 
 export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
-import type { AppState, ScanResult, WatcherEvent, ActiveModule, ScreenshotScanResult, LargeFileScanResult, UnorganizedResult, SimilarResult } from './lib/types'
+import type { AppState, ScanResult, WatcherEvent, ActiveModule, ScreenshotScanResult, LargeFileScanResult, UnorganizedResult, SimilarResult, MasterScanResult, MasterModuleResult, MasterScanModule } from './lib/types'
 
 function AppContent() {
   const [appState, setAppState] = useState<AppState>('idle')
@@ -37,6 +39,11 @@ function AppContent() {
   const [similarResults, setSimilarResults] = useState<SimilarResult | null>(null)
   const [similarAppState, setSimilarAppState] = useState<AppState>('idle')
   const [similarProgress, setSimilarProgress] = useState({ phase: '', percent: 0, message: '' })
+  const [masterResults, setMasterResults] = useState<MasterScanResult | null>(null)
+  const [masterAppState, setMasterAppState] = useState<AppState>('idle')
+  const [masterProgress, setMasterProgress] = useState<MasterModuleResult[]>([])
+  const [masterCurrentModule, setMasterCurrentModule] = useState<MasterScanModule | null>(null)
+  const [masterOverallProgress, setMasterOverallProgress] = useState(0)
   const [isWatching, setIsWatching] = useState(false)
   const [watchedPaths, setWatchedPaths] = useState<string[]>([])
   const [scannedPaths, setScannedPaths] = useState<string[]>([])
@@ -73,7 +80,7 @@ function AppContent() {
     }
   }, [showToast])
 
-  const handleToggleWatch = async () => {
+  const handleToggleWatch = useCallback(async () => {
     try {
       if (isWatching) {
         await invoke('stop_watching')
@@ -94,14 +101,14 @@ function AppContent() {
       console.error('Watch toggle failed:', error)
       showToast('Failed to toggle folder watching', 'error')
     }
-  }
+  }, [isWatching, scannedPaths, showToast])
 
-  const handleScanComplete = (result: ScanResult) => {
+  const handleScanComplete = useCallback((result: ScanResult) => {
     setResults(result)
     setAppState('results')
-  }
+  }, [])
 
-  const handleNewScan = () => {
+  const handleNewScan = useCallback(() => {
     if (activeModule === 'screenshots') {
       setScreenshotResults(null)
       setScreenshotAppState('idle')
@@ -114,31 +121,74 @@ function AppContent() {
     } else if (activeModule === 'similar') {
       setSimilarResults(null)
       setSimilarAppState('idle')
+    } else if (activeModule === 'master') {
+      setMasterResults(null)
+      setMasterAppState('idle')
+      setMasterProgress([])
+      setMasterCurrentModule(null)
+      setMasterOverallProgress(0)
     } else {
       setResults(null)
       setAppState('idle')
     }
-  }
+  }, [activeModule])
 
-  const handleSimilarScanComplete = (result: SimilarResult) => {
+  const handleMasterScanComplete = useCallback((result: MasterScanResult) => {
+    setMasterResults(result)
+    setMasterAppState('results')
+  }, [])
+
+  const handleMasterProgress = useCallback((progress: { current_module: MasterScanModule | null; overall_percent: number; message: string }) => {
+    setMasterCurrentModule(progress.current_module)
+    setMasterOverallProgress(progress.overall_percent)
+  }, [])
+
+  const handleNavigateToModule = useCallback((module: MasterScanModule) => {
+    // Navigate to the specific module and populate with master results
+    if (masterResults) {
+      if (module === 'duplicates' && masterResults.duplicates) {
+        setResults(masterResults.duplicates)
+        setAppState('results')
+        setActiveModule('duplicates')
+      } else if (module === 'similar' && masterResults.similar) {
+        setSimilarResults(masterResults.similar)
+        setSimilarAppState('results')
+        setActiveModule('similar')
+      } else if (module === 'large' && masterResults.large) {
+        setLargeFileResults(masterResults.large)
+        setLargeFileAppState('results')
+        setActiveModule('large')
+      } else if (module === 'screenshots' && masterResults.screenshots) {
+        setScreenshotResults(masterResults.screenshots)
+        setScreenshotAppState('results')
+        setActiveModule('screenshots')
+      } else if (module === 'unorganized' && masterResults.unorganized) {
+        setUnorganizedResults(masterResults.unorganized)
+        setUnorganizedAppState('results')
+        setActiveModule('unorganized')
+      }
+    }
+  }, [masterResults])
+
+  const handleSimilarScanComplete = useCallback((result: SimilarResult) => {
     setSimilarResults(result)
     setSimilarAppState('results')
-  }
+  }, [])
 
-  const handleScreenshotScanComplete = (result: ScreenshotScanResult) => {
+  const handleScreenshotScanComplete = useCallback((result: ScreenshotScanResult) => {
     setScreenshotResults(result)
     setScreenshotAppState('results')
-  }
+  }, [])
 
-  const handleLargeFileScanComplete = (result: LargeFileScanResult) => {
+  const handleLargeFileScanComplete = useCallback((result: LargeFileScanResult) => {
     setLargeFileResults(result)
     setLargeFileAppState('results')
-  }
+  }, [])
 
-  const handleUnorganizedScanComplete = (result: UnorganizedResult) => {
+  const handleUnorganizedScanComplete = useCallback((result: UnorganizedResult) => {
     setUnorganizedResults(result)
     setUnorganizedAppState('results')
-  }
+  }, [])
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-surface-950 text-text-primary selection:bg-brand-primary/30">
@@ -497,6 +547,65 @@ function AppContent() {
               >
                 <HistoryView />
               </motion.div>
+            )}
+
+            {/* Master Scan Module */}
+            {activeModule === 'master' && (
+              <>
+                {masterAppState === 'idle' && (
+                  <motion.div
+                    key="master-idle"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="flex-1 h-full flex flex-col"
+                  >
+                    <MasterScanView
+                      onScanStart={() => setMasterAppState('scanning')}
+                      onScanComplete={handleMasterScanComplete}
+                      onScanCancel={handleNewScan}
+                      onProgress={handleMasterProgress}
+                    />
+                  </motion.div>
+                )}
+
+                {masterAppState === 'scanning' && (
+                  <motion.div
+                    key="master-scanning"
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 1.02 }}
+                    className="flex-1 h-full flex flex-col"
+                  >
+                    <MasterScanView
+                      isScanning
+                      moduleProgress={masterProgress}
+                      overallProgress={masterOverallProgress}
+                      currentModule={masterCurrentModule}
+                      onScanStart={() => { }}
+                      onScanComplete={handleMasterScanComplete}
+                      onScanCancel={handleNewScan}
+                      onProgress={handleMasterProgress}
+                    />
+                  </motion.div>
+                )}
+
+                {masterAppState === 'results' && masterResults && (
+                  <motion.div
+                    key="master-results"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="flex-1 h-full flex flex-col"
+                  >
+                    <MasterResultsView
+                      results={masterResults}
+                      onNewScan={handleNewScan}
+                      onNavigateToModule={handleNavigateToModule}
+                    />
+                  </motion.div>
+                )}
+              </>
             )}
           </AnimatePresence>
         </main>

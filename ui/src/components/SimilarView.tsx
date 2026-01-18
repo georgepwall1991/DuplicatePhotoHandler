@@ -8,6 +8,7 @@ import { ImagePreview } from './ImagePreview'
 import { ActionBar } from './ActionBar'
 import { ConfirmModal } from './ConfirmModal'
 import { EmptyState } from './EmptyState'
+import { Search, Sparkles } from 'lucide-react'
 import { useToast } from './Toast'
 
 interface SimilarViewProps {
@@ -135,7 +136,7 @@ export function SimilarView({ results, onNewScan }: SimilarViewProps) {
   if (!results) {
     return (
       <EmptyState
-        icon="🔍"
+        icon={Search}
         title="No Similar Photos Data"
         message="Run a scan to find similar photos"
       />
@@ -164,7 +165,7 @@ export function SimilarView({ results, onNewScan }: SimilarViewProps) {
         </div>
 
         <EmptyState
-          icon="✨"
+          icon={Sparkles}
           title="No Similar Photos Found"
           message="All your photos are unique! No similar photos were detected."
         />

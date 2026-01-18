@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { invoke, convertFileSrc } from '../lib/tauri'
-import { ZoomIn, ZoomOut, Maximize, RotateCcw } from 'lucide-react'
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import type { FileInfo } from '../lib/types'
 
 interface ComparisonViewProps {
