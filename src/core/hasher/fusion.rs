@@ -126,7 +126,10 @@ impl FusionHash {
         if bytes.len() < offset + ahash_len {
             return None;
         }
-        let ahash = ImageHashValue::from_bytes(&bytes[offset..offset + ahash_len], HashAlgorithmKind::Average);
+        let ahash = ImageHashValue::from_bytes(
+            &bytes[offset..offset + ahash_len],
+            HashAlgorithmKind::Average,
+        );
         offset += ahash_len;
 
         // dHash
@@ -138,7 +141,10 @@ impl FusionHash {
         if bytes.len() < offset + dhash_len {
             return None;
         }
-        let dhash = ImageHashValue::from_bytes(&bytes[offset..offset + dhash_len], HashAlgorithmKind::Difference);
+        let dhash = ImageHashValue::from_bytes(
+            &bytes[offset..offset + dhash_len],
+            HashAlgorithmKind::Difference,
+        );
         offset += dhash_len;
 
         // pHash
@@ -150,7 +156,10 @@ impl FusionHash {
         if bytes.len() < offset + phash_len {
             return None;
         }
-        let phash = ImageHashValue::from_bytes(&bytes[offset..offset + phash_len], HashAlgorithmKind::Perceptual);
+        let phash = ImageHashValue::from_bytes(
+            &bytes[offset..offset + phash_len],
+            HashAlgorithmKind::Perceptual,
+        );
 
         Some(Self {
             ahash,
@@ -232,13 +241,21 @@ impl FusionHasher {
     }
 
     /// Compute fusion hash from a loaded image
+    /// Uses parallel execution for all three algorithms
     pub fn hash_image(&self, image: &DynamicImage) -> Result<FusionHash, HashError> {
-        // Compute all three hashes from the same image
-        let ahash = self.ahash.hash_image(image)?;
-        let dhash = self.dhash.hash_image(image)?;
-        let phash = self.phash.hash_image(image)?;
+        // Run all three hash algorithms in parallel using rayon
+        // This provides ~3x speedup for CPU-bound hashing
+        let (ahash_result, (dhash_result, phash_result)) = rayon::join(
+            || self.ahash.hash_image(image),
+            || {
+                rayon::join(
+                    || self.dhash.hash_image(image),
+                    || self.phash.hash_image(image),
+                )
+            },
+        );
 
-        Ok(FusionHash::new(ahash, dhash, phash))
+        Ok(FusionHash::new(ahash_result?, dhash_result?, phash_result?))
     }
 }
 

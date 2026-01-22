@@ -53,11 +53,8 @@ impl SqliteCache {
         .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
 
         // Create index for faster lookups
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_path ON hashes(path)",
-            [],
-        )
-        .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_path ON hashes(path)", [])
+            .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
 
         // Create scan state table for incremental scanning
         conn.execute(
@@ -74,6 +71,17 @@ impl SqliteCache {
             conn: Mutex::new(conn),
             db_path: path.to_path_buf(),
         })
+    }
+
+    /// Open a cache database and prune orphaned entries
+    ///
+    /// This is useful for startup cleanup to remove cache entries for files
+    /// that have been deleted outside of the application.
+    pub fn open_with_prune(path: &Path) -> Result<Self, CacheError> {
+        let cache = Self::open(path)?;
+        // Prune orphans silently on open - don't fail if pruning fails
+        let _ = cache.prune_orphans();
+        Ok(cache)
     }
 
     /// Convert SystemTime to Unix timestamp
@@ -314,9 +322,11 @@ impl CacheBackend for SqliteCache {
             .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
 
         let total_size_bytes: u64 = conn
-            .query_row("SELECT COALESCE(SUM(LENGTH(hash)), 0) FROM hashes", [], |row| {
-                row.get::<_, i64>(0).map(|v| v as u64)
-            })
+            .query_row(
+                "SELECT COALESCE(SUM(LENGTH(hash)), 0) FROM hashes",
+                [],
+                |row| row.get::<_, i64>(0).map(|v| v as u64),
+            )
             .map_err(|e| CacheError::QueryFailed(e.to_string()))?;
 
         let oldest_entry: Option<SystemTime> = conn
@@ -410,7 +420,8 @@ mod tests {
         let entry = create_entry("/test.jpg");
         let size = entry.file_size;
         // Store the timestamp we'll use for retrieval (truncated to seconds for SQLite)
-        let modified_secs = entry.file_modified
+        let modified_secs = entry
+            .file_modified
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();

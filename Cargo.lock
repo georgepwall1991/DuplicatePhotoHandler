@@ -1051,6 +1051,7 @@ dependencies = [
  "image_hasher",
  "indicatif",
  "kamadak-exif",
+ "memmap2",
  "notify",
  "predicates",
  "rayon",
@@ -1062,6 +1063,7 @@ dependencies = [
  "thiserror 2.0.17",
  "uuid",
  "walkdir",
+ "xxhash-rust",
  "zune-core 0.4.12",
  "zune-jpeg 0.4.21",
 ]
@@ -2611,6 +2613,15 @@ name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
+
+[[package]]
+name = "memmap2"
+version = "0.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "744133e4a0e0a658e1374cf3bf8e415c4052a15a111acd372764c55b4177d490"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "memoffset"
@@ -6436,6 +6447,12 @@ dependencies = [
  "once_cell",
  "pkg-config",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "y4m"

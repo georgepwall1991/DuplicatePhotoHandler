@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { ProgressRing } from './ProgressRing'
 import { Activity, Images, Layers, XCircle, Terminal } from 'lucide-react'
+import hashBrownImg from '../assets/hash-brown.png'
 
 interface ScanProgressProps {
   phase: string
@@ -21,6 +22,8 @@ export function ScanProgress({
   isCancelling,
   onCancel,
 }: ScanProgressProps) {
+  const isHashing = phase.toLowerCase() === 'hashing'
+
   return (
     <div className="h-full flex flex-col items-center justify-center p-12 relative overflow-hidden">
       {/* Background Tech Elements - subtle overlay on top of main background */}
@@ -41,6 +44,17 @@ export function ScanProgress({
       {/* Main Scanner */}
       <div className="relative mb-16">
         <ProgressRing progress={percent} size={280} strokeWidth={10} />
+        {/* Rotating Hash Brown - appears during Hashing phase */}
+        {isHashing && (
+          <motion.img
+            src={hashBrownImg}
+            alt="Hash Brown"
+            className="absolute top-1/2 left-1/2 w-24 h-24 object-contain drop-shadow-[0_0_15px_rgba(255,180,50,0.5)]"
+            style={{ marginLeft: -48, marginTop: -48 }}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          />
+        )}
       </div>
 
       {/* Status Console */}
@@ -51,7 +65,17 @@ export function ScanProgress({
           animate={{ opacity: 1, y: 0 }}
           className="inline-flex items-center gap-2 px-4 py-2 bg-brand-primary/10 border border-brand-primary/20 text-brand-primary mb-6 rounded-full"
         >
-          <Activity className="w-4 h-4 animate-pulse" />
+          {isHashing ? (
+            <motion.span
+              className="text-lg"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            >
+              🥔
+            </motion.span>
+          ) : (
+            <Activity className="w-4 h-4 animate-pulse" />
+          )}
           <span className="text-xs font-black uppercase tracking-widest">{phase}</span>
         </motion.div>
 

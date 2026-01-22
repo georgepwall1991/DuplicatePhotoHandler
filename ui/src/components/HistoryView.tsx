@@ -8,6 +8,7 @@ import { HistoryCard } from './HistoryCard'
 import { EmptyState } from './EmptyState'
 import { ConfirmModal } from './ConfirmModal'
 import { useToast } from './Toast'
+import { SkeletonList, SkeletonStatCard } from './SkeletonLoader'
 
 export function HistoryView() {
   const [history, setHistory] = useState<ScanHistoryEntry[]>([])
@@ -75,10 +76,17 @@ export function HistoryView() {
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-8 h-8 text-gray-400 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading history...</p>
+      <div className="h-full flex flex-col">
+        {/* Header skeleton */}
+        <div className="border-b border-white/10 bg-white/5 backdrop-blur-sm px-6 py-4">
+          <div className="flex items-center gap-3">
+            <History className="w-5 h-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-white">Scan History</h2>
+          </div>
+        </div>
+        {/* Skeleton list */}
+        <div className="flex-1 overflow-auto p-6">
+          <SkeletonList count={5} type="history" />
         </div>
       </div>
     )

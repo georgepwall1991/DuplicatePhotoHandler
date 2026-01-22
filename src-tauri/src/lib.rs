@@ -37,6 +37,10 @@ pub fn run() {
             commands::get_scan_details,
             commands::delete_scan_history,
             commands::clear_scan_history,
+            commands::get_lifetime_savings,
+            commands::save_lifetime_savings,
+            commands::get_trashed_files,
+            commands::get_interrupted_scans,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

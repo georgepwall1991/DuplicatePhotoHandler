@@ -3,22 +3,23 @@
 use duplicate_photo_cleaner::core::cache::{CacheBackend, SqliteCache};
 use duplicate_photo_cleaner::core::comparator::DuplicateGroup;
 use duplicate_photo_cleaner::core::hasher::HashAlgorithmKind;
-use duplicate_photo_cleaner::core::large_files::{LargeFileScanner, LargeFileScanResult};
+use duplicate_photo_cleaner::core::history::{
+    HistoryRepository, ModuleType as HistoryModuleType, ScanHistoryEntry, ScanHistoryResult,
+    ScanStatus,
+};
+use duplicate_photo_cleaner::core::large_files::{LargeFileScanResult, LargeFileScanner};
 use duplicate_photo_cleaner::core::organize::{
     OperationMode, OrganizeConfig, OrganizeExecutor, OrganizePlan, OrganizePlanner, OrganizeResult,
 };
+use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
+use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
+use duplicate_photo_cleaner::core::similar::{SimilarConfig, SimilarResult, SimilarScanner};
 use duplicate_photo_cleaner::core::unorganized::{
     UnorganizedConfig, UnorganizedResult, UnorganizedScanner,
 };
-use duplicate_photo_cleaner::core::similar::{
-    SimilarConfig, SimilarResult, SimilarScanner,
+use duplicate_photo_cleaner::core::watcher::{
+    FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent,
 };
-use duplicate_photo_cleaner::core::history::{
-    HistoryRepository, ModuleType as HistoryModuleType, ScanHistoryEntry, ScanHistoryResult, ScanStatus,
-};
-use duplicate_photo_cleaner::core::pipeline::{CancellationToken, Pipeline, PipelineResult};
-use duplicate_photo_cleaner::core::reporter::{export_csv, export_html};
-use duplicate_photo_cleaner::core::watcher::{FolderWatcher, WatcherConfig, WatcherEvent as CoreWatcherEvent};
 use duplicate_photo_cleaner::events::{Event, EventSender, PipelineEvent, WatcherEvent};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -78,7 +79,11 @@ impl From<&DuplicateGroup> for DuplicateGroupDto {
     fn from(group: &DuplicateGroup) -> Self {
         Self {
             id: group.id.to_string(),
-            photos: group.photos.iter().map(|p| p.display().to_string()).collect(),
+            photos: group
+                .photos
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect(),
             representative: group.representative.display().to_string(),
             match_type: format!("{:?}", group.match_type),
             duplicate_count: group.duplicate_count(),
@@ -148,7 +153,8 @@ pub async fn start_scan(
             // Check if cancelled before forwarding
             if cancelled_check.load(Ordering::SeqCst) {
                 // Emit cancelled event and stop
-                let _ = forward_handle.emit("scan-event", &Event::Pipeline(PipelineEvent::Cancelled));
+                let _ =
+                    forward_handle.emit("scan-event", &Event::Pipeline(PipelineEvent::Cancelled));
                 break;
             }
             let _ = forward_handle.emit("scan-event", &event);
@@ -288,15 +294,19 @@ pub async fn get_file_info(path: String) -> Result<FileInfo, String> {
 
 /// Move files to trash
 #[tauri::command]
-pub async fn trash_files(paths: Vec<String>) -> Result<TrashResult, String> {
+pub async fn trash_files(app: AppHandle, paths: Vec<String>) -> Result<TrashResult, String> {
     let mut trashed = 0;
     let mut errors = Vec::new();
+    let mut trashed_paths = Vec::new();
 
     for path_str in paths {
         let path = PathBuf::from(&path_str);
         if path.exists() {
             match trash::delete(&path) {
-                Ok(_) => trashed += 1,
+                Ok(_) => {
+                    trashed += 1;
+                    trashed_paths.push(path);
+                }
                 Err(e) => {
                     let error_msg = format!("{}: {}", path_str, e);
                     log::warn!("Failed to trash {}", error_msg);
@@ -308,7 +318,104 @@ pub async fn trash_files(paths: Vec<String>) -> Result<TrashResult, String> {
         }
     }
 
+    // Remove trashed files from cache to keep it clean
+    if !trashed_paths.is_empty() {
+        if let Ok(cache_path) = get_cache_path(&app) {
+            if cache_path.exists() {
+                if let Ok(cache) = SqliteCache::open(&cache_path) {
+                    for path in &trashed_paths {
+                        let _ = cache.remove(path);
+                    }
+                }
+            }
+        }
+    }
+
     Ok(TrashResult { trashed, errors })
+}
+
+/// DTO for a trashed file in the Recovery Zone
+#[derive(Debug, Serialize)]
+pub struct TrashedFileDto {
+    pub filename: String,
+    pub original_path: String,
+    pub size_bytes: u64,
+    pub trashed_at: i64,
+}
+
+/// Result of listing trashed files
+#[derive(Debug, Serialize)]
+pub struct TrashedFilesResult {
+    pub files: Vec<TrashedFileDto>,
+    pub total_size_bytes: u64,
+}
+
+/// List files in the system Trash (macOS only)
+/// Uses AppleScript to enumerate trash items
+#[tauri::command]
+pub async fn get_trashed_files() -> Result<TrashedFilesResult, String> {
+    let mut files = Vec::new();
+    let mut total_size_bytes: u64 = 0;
+
+    #[cfg(target_os = "macos")]
+    {
+        // AppleScript to list all items in Trash with their properties
+        let script = r#"
+            tell application "Finder"
+                set output to ""
+                set trashItems to items of trash
+                repeat with trashItem in trashItems
+                    try
+                        set itemName to name of trashItem as string
+                        set itemSize to size of trashItem
+                        set itemPath to POSIX path of (original item of trashItem as alias)
+                        set modDate to modification date of trashItem
+                        set epochTime to (modDate - (date "Thursday, January 1, 1970 at 12:00:00 AM")) / 86400 * 86400
+                        set output to output & itemName & "|" & itemPath & "|" & itemSize & "|" & (round epochTime) & "
+"
+                    end try
+                end repeat
+                return output
+            end tell
+        "#;
+
+        let output = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .map_err(|e| format!("Failed to run AppleScript: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        for line in stdout.lines() {
+            let parts: Vec<&str> = line.split('|').collect();
+            if parts.len() >= 4 {
+                let filename = parts[0].to_string();
+                let original_path = parts[1].to_string();
+                let size_bytes: u64 = parts[2].parse().unwrap_or(0);
+                let trashed_at: i64 = parts[3].parse().unwrap_or(0);
+
+                total_size_bytes += size_bytes;
+                files.push(TrashedFileDto {
+                    filename,
+                    original_path,
+                    size_bytes,
+                    trashed_at,
+                });
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        // On other platforms, return empty - Trash API varies significantly
+        log::warn!("get_trashed_files is only supported on macOS");
+    }
+
+    Ok(TrashedFilesResult {
+        files,
+        total_size_bytes,
+    })
 }
 
 /// Result of restore operation
@@ -384,7 +491,10 @@ pub async fn restore_from_trash(filenames: Vec<String>) -> Result<RestoreResult,
         for filename in filenames {
             // Security: Validate filename to prevent AppleScript injection
             if !is_safe_filename(&filename) {
-                errors.push(format!("{}: Invalid filename (contains unsafe characters)", filename));
+                errors.push(format!(
+                    "{}: Invalid filename (contains unsafe characters)",
+                    filename
+                ));
                 continue;
             }
 
@@ -454,18 +564,14 @@ pub fn start_watching(
     // Create watcher with event handler
     let mut watcher = FolderWatcher::new(WatcherConfig::default(), move |event| {
         let tauri_event = match event {
-            CoreWatcherEvent::PhotoAdded(path) => {
-                Event::Watcher(WatcherEvent::PhotoAdded { path })
-            }
+            CoreWatcherEvent::PhotoAdded(path) => Event::Watcher(WatcherEvent::PhotoAdded { path }),
             CoreWatcherEvent::PhotoModified(path) => {
                 Event::Watcher(WatcherEvent::PhotoModified { path })
             }
             CoreWatcherEvent::PhotoRemoved(path) => {
                 Event::Watcher(WatcherEvent::PhotoRemoved { path })
             }
-            CoreWatcherEvent::Error(msg) => {
-                Event::Watcher(WatcherEvent::Error { message: msg })
-            }
+            CoreWatcherEvent::Error(msg) => Event::Watcher(WatcherEvent::Error { message: msg }),
         };
         let _ = app_handle.emit("watcher-event", &tauri_event);
     })
@@ -597,7 +703,9 @@ pub enum ScreenshotConfidenceDto {
     Low,
 }
 
-impl From<duplicate_photo_cleaner::core::screenshot::ScreenshotConfidence> for ScreenshotConfidenceDto {
+impl From<duplicate_photo_cleaner::core::screenshot::ScreenshotConfidence>
+    for ScreenshotConfidenceDto
+{
     fn from(c: duplicate_photo_cleaner::core::screenshot::ScreenshotConfidence) -> Self {
         use duplicate_photo_cleaner::core::screenshot::ScreenshotConfidence;
         match c {
@@ -683,6 +791,34 @@ pub fn clear_cache(app: AppHandle) -> Result<bool, String> {
     Ok(true)
 }
 
+/// DTO for interrupted scan state
+#[derive(Debug, Serialize)]
+pub struct ScanStateDto {
+    pub directory: String,
+    pub file_count: usize,
+    pub last_scan_time: i64,
+}
+
+/// Get any interrupted scans that can be resumed
+#[tauri::command]
+pub fn get_interrupted_scans(app: AppHandle) -> Result<Vec<ScanStateDto>, String> {
+    let cache_path = get_cache_path(&app)?;
+
+    if !cache_path.exists() {
+        return Ok(vec![]);
+    }
+
+    let cache = SqliteCache::open(&cache_path).map_err(|e| e.to_string())?;
+
+    // Get all scan states from recent scans
+    // For now, return empty - scan state tracking would need to be
+    // integrated into the pipeline to track in-progress scans
+    // This is a placeholder for future implementation
+    let _ = cache;
+
+    Ok(vec![])
+}
+
 /// Scan for screenshots and duplicates among them
 #[tauri::command]
 pub async fn scan_screenshots(
@@ -729,7 +865,8 @@ pub async fn scan_screenshots(
     let paths: Vec<PathBuf> = config.paths.iter().map(PathBuf::from).collect();
 
     // Scan for all photos first
-    let scanner = WalkDirScanner::new(duplicate_photo_cleaner::core::scanner::ScanConfig::default());
+    let scanner =
+        WalkDirScanner::new(duplicate_photo_cleaner::core::scanner::ScanConfig::default());
     let scan_result = match scanner.scan(&paths) {
         Ok(result) => result,
         Err(e) => {
@@ -747,7 +884,10 @@ pub async fn scan_screenshots(
     std::thread::spawn(move || {
         while let Ok(event) = receiver.recv() {
             if cancelled_check.load(Ordering::SeqCst) {
-                let _ = forward_handle.emit("screenshot-scan-event", &Event::Pipeline(PipelineEvent::Cancelled));
+                let _ = forward_handle.emit(
+                    "screenshot-scan-event",
+                    &Event::Pipeline(PipelineEvent::Cancelled),
+                );
                 break;
             }
             let _ = forward_handle.emit("screenshot-scan-event", &event);
@@ -799,37 +939,39 @@ pub async fn scan_screenshots(
     }
 
     // Run duplicate detection on screenshots only if we found any
-    let (duplicate_groups, _duplicate_count, _potential_savings) = if !screenshot_paths.is_empty() && !cancelled.load(Ordering::SeqCst) {
-        let pipeline = Pipeline::builder()
-            .paths(screenshot_paths.clone())
-            .algorithm(algorithm)
-            .threshold(config.threshold)
-            .build();
+    let (duplicate_groups, _duplicate_count, _potential_savings) =
+        if !screenshot_paths.is_empty() && !cancelled.load(Ordering::SeqCst) {
+            let pipeline = Pipeline::builder()
+                .paths(screenshot_paths.clone())
+                .algorithm(algorithm)
+                .threshold(config.threshold)
+                .build();
 
-        let cancel_token: CancellationToken = cancelled.clone();
-        match tokio::task::spawn_blocking(move || {
-            pipeline.run_with_cancellation(&event_sender, cancel_token)
-        })
-        .await
-        {
-            Ok(Ok(result)) => {
-                let groups: Vec<DuplicateGroupDto> = result.groups.iter().map(DuplicateGroupDto::from).collect();
-                let dup_count: usize = groups.iter().map(|g| g.duplicate_count).sum();
-                let savings: u64 = groups.iter().map(|g| g.duplicate_size_bytes).sum();
-                (groups, dup_count, savings)
+            let cancel_token: CancellationToken = cancelled.clone();
+            match tokio::task::spawn_blocking(move || {
+                pipeline.run_with_cancellation(&event_sender, cancel_token)
+            })
+            .await
+            {
+                Ok(Ok(result)) => {
+                    let groups: Vec<DuplicateGroupDto> =
+                        result.groups.iter().map(DuplicateGroupDto::from).collect();
+                    let dup_count: usize = groups.iter().map(|g| g.duplicate_count).sum();
+                    let savings: u64 = groups.iter().map(|g| g.duplicate_size_bytes).sum();
+                    (groups, dup_count, savings)
+                }
+                Ok(Err(e)) => {
+                    log::error!("Screenshot duplicate detection failed: {}", e);
+                    (Vec::new(), 0, 0)
+                }
+                Err(e) => {
+                    log::error!("Screenshot duplicate detection task panicked: {}", e);
+                    (Vec::new(), 0, 0)
+                }
             }
-            Ok(Err(e)) => {
-                log::error!("Screenshot duplicate detection failed: {}", e);
-                (Vec::new(), 0, 0)
-            }
-            Err(e) => {
-                log::error!("Screenshot duplicate detection task panicked: {}", e);
-                (Vec::new(), 0, 0)
-            }
-        }
-    } else {
-        (Vec::new(), 0, 0)
-    };
+        } else {
+            (Vec::new(), 0, 0)
+        };
 
     // ALWAYS reset scanning state
     {
@@ -1398,7 +1540,9 @@ pub fn get_scan_history(
     get_or_init_history(&state, &app)?;
 
     let history = state.history.lock().map_err(|e| e.to_string())?;
-    let repo = history.as_ref().ok_or("History repository not initialized")?;
+    let repo = history
+        .as_ref()
+        .ok_or("History repository not initialized")?;
 
     let result = repo.list_scans(limit.unwrap_or(50), offset.unwrap_or(0))?;
     Ok(result.into())
@@ -1414,7 +1558,9 @@ pub fn get_scan_details(
     get_or_init_history(&state, &app)?;
 
     let history = state.history.lock().map_err(|e| e.to_string())?;
-    let repo = history.as_ref().ok_or("History repository not initialized")?;
+    let repo = history
+        .as_ref()
+        .ok_or("History repository not initialized")?;
 
     let entry = repo.get_scan(&scan_id)?;
     Ok(entry.map(|e| e.into()))
@@ -1430,21 +1576,22 @@ pub fn delete_scan_history(
     get_or_init_history(&state, &app)?;
 
     let history = state.history.lock().map_err(|e| e.to_string())?;
-    let repo = history.as_ref().ok_or("History repository not initialized")?;
+    let repo = history
+        .as_ref()
+        .ok_or("History repository not initialized")?;
 
     repo.delete_scan(&scan_id)
 }
 
 /// Clear all scan history
 #[tauri::command]
-pub fn clear_scan_history(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<usize, String> {
+pub fn clear_scan_history(app: AppHandle, state: State<'_, AppState>) -> Result<usize, String> {
     get_or_init_history(&state, &app)?;
 
     let history = state.history.lock().map_err(|e| e.to_string())?;
-    let repo = history.as_ref().ok_or("History repository not initialized")?;
+    let repo = history
+        .as_ref()
+        .ok_or("History repository not initialized")?;
 
     repo.clear_history()
 }
@@ -1465,7 +1612,9 @@ pub fn save_to_history(
     get_or_init_history(state, app)?;
 
     let history = state.history.lock().map_err(|e| e.to_string())?;
-    let repo = history.as_ref().ok_or("History repository not initialized")?;
+    let repo = history
+        .as_ref()
+        .ok_or("History repository not initialized")?;
 
     let entry = ScanHistoryEntry {
         id: HistoryRepository::generate_id(),
@@ -1485,4 +1634,59 @@ pub fn save_to_history(
     };
 
     repo.save_scan(&entry)
+}
+
+/// Get the path for storing app statistics
+fn get_stats_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Ensure directory exists
+    std::fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+
+    Ok(app_data_dir.join("stats.json"))
+}
+
+/// Stats structure for JSON storage
+#[derive(Debug, Serialize, Deserialize, Default)]
+struct AppStats {
+    lifetime_savings_bytes: u64,
+}
+
+/// Get lifetime space savings in bytes
+#[tauri::command]
+pub fn get_lifetime_savings(app: AppHandle) -> Result<u64, String> {
+    let stats_path = get_stats_path(&app)?;
+
+    if !stats_path.exists() {
+        return Ok(0);
+    }
+
+    let contents = std::fs::read_to_string(&stats_path)
+        .map_err(|e| format!("Failed to read stats file: {}", e))?;
+
+    let stats: AppStats = serde_json::from_str(&contents).unwrap_or_default();
+
+    Ok(stats.lifetime_savings_bytes)
+}
+
+/// Save lifetime space savings in bytes
+#[tauri::command]
+pub fn save_lifetime_savings(app: AppHandle, bytes: u64) -> Result<bool, String> {
+    let stats_path = get_stats_path(&app)?;
+
+    let stats = AppStats {
+        lifetime_savings_bytes: bytes,
+    };
+
+    let contents = serde_json::to_string_pretty(&stats)
+        .map_err(|e| format!("Failed to serialize stats: {}", e))?;
+
+    std::fs::write(&stats_path, contents)
+        .map_err(|e| format!("Failed to write stats file: {}", e))?;
+
+    Ok(true)
 }

@@ -103,8 +103,21 @@ export interface LargeFileScanResult {
   scan_duration_ms: number
 }
 
+// Trashed file info for Recovery Zone
+export interface TrashedFile {
+  filename: string
+  original_path: string
+  size_bytes: number
+  trashed_at: number // Unix timestamp
+}
+
+export interface TrashedFilesResult {
+  files: TrashedFile[]
+  total_size_bytes: number
+}
+
 // Module routing
-export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized' | 'similar' | 'history' | 'master'
+export type ActiveModule = 'duplicates' | 'screenshots' | 'large' | 'organize' | 'unorganized' | 'similar' | 'history' | 'master' | 'recovery'
 
 // Master Scan types
 export type MasterScanModule = 'duplicates' | 'similar' | 'large' | 'screenshots' | 'unorganized'
@@ -302,4 +315,11 @@ export interface UnorganizedProgress {
   phase: string
   files_scanned: number
   message: string
+}
+
+// Scan state for resume functionality
+export interface ScanState {
+  directory: string
+  file_count: number
+  last_scan_time: number // Unix timestamp
 }

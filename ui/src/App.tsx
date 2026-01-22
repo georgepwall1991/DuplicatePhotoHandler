@@ -18,6 +18,9 @@ import { MasterScanView } from './components/MasterScanView'
 import { MasterResultsView } from './components/MasterResultsView'
 import { SettingsModal } from './components/SettingsModal'
 import { ToastProvider, useToast } from './components/Toast'
+import { SpaceSavingsProvider } from './context/SpaceSavingsContext'
+import { CommandPalette } from './components/CommandPalette'
+import { RecoveryView } from './components/RecoveryView'
 import './App.css'
 
 export type { AppState, ScanResult, DuplicateGroup, ScanProgress } from './lib/types'
@@ -50,6 +53,7 @@ function AppContent() {
   const [showSettings, setShowSettings] = useState(false)
   const [activeModule, setActiveModule] = useState<ActiveModule>('duplicates')
   const [organizePaths, setOrganizePaths] = useState<string[]>([])
+  const [showCommandPalette, setShowCommandPalette] = useState(false)
   const { showToast } = useToast()
   const watcherUnlistenRef = useRef<(() => void) | null>(null)
 
@@ -79,6 +83,20 @@ function AppContent() {
       }
     }
   }, [showToast])
+
+  // Global keyboard shortcut for command palette (⌘K / Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // ⌘K on Mac, Ctrl+K on Windows/Linux
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowCommandPalette(prev => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const handleToggleWatch = useCallback(async () => {
     try {
@@ -230,6 +248,7 @@ function AppContent() {
             watchedPaths={watchedPaths}
             onToggleWatch={handleToggleWatch}
             onOpenSettings={() => setShowSettings(true)}
+            onOpenCommandPalette={() => setShowCommandPalette(true)}
           />
         </div>
 
@@ -549,6 +568,19 @@ function AppContent() {
               </motion.div>
             )}
 
+            {/* Recovery Module */}
+            {activeModule === 'recovery' && (
+              <motion.div
+                key="recovery"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="flex-1 h-full flex flex-col"
+              >
+                <RecoveryView />
+              </motion.div>
+            )}
+
             {/* Master Scan Module */}
             {activeModule === 'master' && (
               <>
@@ -615,6 +647,17 @@ function AppContent() {
           onClose={() => setShowSettings(false)}
           onCacheCleared={() => showToast('Cache cleared successfully', 'success')}
         />
+
+        <CommandPalette
+          isOpen={showCommandPalette}
+          onClose={() => setShowCommandPalette(false)}
+          onNavigate={(module) => {
+            setActiveModule(module)
+            handleNewScan()
+          }}
+          onNewScan={handleNewScan}
+          onOpenSettings={() => setShowSettings(true)}
+        />
       </div>
     </div>
   )
@@ -623,7 +666,9 @@ function AppContent() {
 function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <SpaceSavingsProvider>
+        <AppContent />
+      </SpaceSavingsProvider>
     </ToastProvider>
   )
 }

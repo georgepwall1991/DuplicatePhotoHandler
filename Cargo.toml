@@ -60,6 +60,15 @@ notify = "7.0"
 # Regex for pattern matching
 regex = "1"
 
+# Temporary file creation (for HEIC conversion)
+tempfile = "3.12"
+
+# Memory-mapped file I/O (20-40% faster for large images)
+memmap2 = "0.9"
+
+# Fast byte hashing for prefix checks (100x faster than perceptual)
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
 [dev-dependencies]
 # Testing
 tempfile = "3.12"

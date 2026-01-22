@@ -158,6 +158,44 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     return { trashed: paths?.length || 0, errors: [] } as T;
   }
 
+  // Space savings mock commands
+  if (command === 'get_lifetime_savings') {
+    // Mock: return stored value from localStorage for browser testing
+    const stored = localStorage.getItem('pixelift_lifetime_savings');
+    return (stored ? parseInt(stored, 10) : 0) as T;
+  }
+
+  if (command === 'save_lifetime_savings') {
+    const bytes = args?.bytes as number;
+    localStorage.setItem('pixelift_lifetime_savings', String(bytes));
+    return true as T;
+  }
+
+  // Recovery Zone mock commands
+  if (command === 'get_trashed_files') {
+    // Mock: return sample trashed files stored in localStorage
+    const stored = localStorage.getItem('pixelift_trashed_files');
+    if (stored) {
+      const files = JSON.parse(stored);
+      const total = files.reduce((acc: number, f: { size_bytes: number }) => acc + f.size_bytes, 0);
+      return { files, total_size_bytes: total } as T;
+    }
+    // Return empty if nothing stored - or sample data for demo
+    const sampleFiles = [
+      { filename: 'IMG_1234.jpg', original_path: '/Users/demo/Photos/IMG_1234.jpg', size_bytes: 3500000, trashed_at: Date.now() / 1000 - 86400 },
+      { filename: 'DSC_5678.png', original_path: '/Users/demo/Pictures/DSC_5678.png', size_bytes: 8200000, trashed_at: Date.now() / 1000 - 172800 },
+      { filename: 'screenshot_2024.png', original_path: '/Users/demo/Desktop/screenshot_2024.png', size_bytes: 1200000, trashed_at: Date.now() / 1000 - 3600 },
+    ];
+    return { files: sampleFiles, total_size_bytes: 12900000 } as T;
+  }
+
+  if (command === 'restore_from_trash') {
+    await wait(800);
+    const filenames = args?.filenames as string[] | undefined;
+    // Mock: simulate successful restore
+    return { restored: filenames?.length || 0, errors: [] } as T;
+  }
+
   throw new Error(`Mock command not implemented: ${command}`);
 }
 

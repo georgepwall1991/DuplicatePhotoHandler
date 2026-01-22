@@ -13,9 +13,10 @@ import {
   FolderSearch,
   History,
   ShieldCheck,
-  Database,
   FolderTree,
+  RotateCcw,
 } from 'lucide-react'
+import { SpaceSavingsBar } from './SpaceSavingsBar'
 
 interface SidebarProps {
   activeModule: ActiveModule
@@ -26,30 +27,24 @@ interface SidebarProps {
   watchedPaths?: string[]
   onToggleWatch?: () => void
   onOpenSettings?: () => void
-}
-
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  onOpenCommandPalette?: () => void
 }
 
 // Type guard to check if an item id is a valid ActiveModule
 const isActiveModule = (id: string): id is ActiveModule => {
-  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize' || id === 'unorganized' || id === 'similar' || id === 'history' || id === 'master'
+  return id === 'duplicates' || id === 'screenshots' || id === 'large' || id === 'organize' || id === 'unorganized' || id === 'similar' || id === 'history' || id === 'master' || id === 'recovery'
 }
 
 export function Sidebar({
   activeModule,
   onModuleChange,
   onNewScan,
-  potentialSavings,
+  potentialSavings: _potentialSavings,
   isWatching,
   watchedPaths: _watchedPaths,
   onToggleWatch,
-  onOpenSettings
+  onOpenSettings,
+  onOpenCommandPalette,
 }: SidebarProps) {
   const guardEnabled = Boolean(isWatching)
 
@@ -71,11 +66,21 @@ export function Sidebar({
         { id: 'organize', name: 'Organize', hint: 'Sort by date', icon: FolderTree, available: true },
         { id: 'unorganized', name: 'Unorganized', hint: 'Loose files', icon: FolderSearch, available: true }
       ]
+    },
+    {
+      label: 'Recovery',
+      items: [
+        { id: 'recovery', name: 'Recovery Zone', hint: 'Restore deleted', icon: RotateCcw, available: true }
+      ]
     }
   ]
 
   return (
-    <aside className="w-full h-full flex flex-col glass-panel rounded-2xl overflow-hidden border border-white/5 bg-surface-900/40">
+    <aside
+      className="w-full h-full flex flex-col glass-panel rounded-2xl overflow-hidden border border-white/5 bg-surface-900/40"
+      role="navigation"
+      aria-label="Main navigation"
+    >
       <div className="p-5 flex-1 flex flex-col min-h-0">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -124,7 +129,11 @@ export function Sidebar({
 
         {/* Search */}
         <div className="mb-6">
-          <button className="w-full flex items-center gap-2 bg-white/5 hover:bg-white/10 transition-colors border border-white/5 rounded-lg px-3 py-2 text-sm text-text-muted">
+          <button
+            onClick={onOpenCommandPalette}
+            className="w-full flex items-center gap-2 bg-white/5 hover:bg-white/10 transition-colors border border-white/5 rounded-lg px-3 py-2 text-sm text-text-muted"
+            aria-label="Open command palette, keyboard shortcut Command K"
+          >
             <Search className="h-4 w-4" />
             <span className="flex-1 text-left">Search...</span>
             <span className="text-[10px] border border-white/10 rounded px-1.5 py-0.5 opacity-50"><Command className="inline h-3 w-3 align-middle" /> K</span>
@@ -180,6 +189,9 @@ export function Sidebar({
             <button
               onClick={onToggleWatch}
               className={`w-8 h-5 rounded-full relative transition-colors ${guardEnabled ? 'bg-emerald-500' : 'bg-white/20'}`}
+              role="switch"
+              aria-checked={guardEnabled}
+              aria-label={`Auto-Guard ${guardEnabled ? 'enabled' : 'disabled'}. Click to toggle.`}
             >
               <motion.div
                 animate={{ x: guardEnabled ? 12 : 2 }}
@@ -188,24 +200,11 @@ export function Sidebar({
             </button>
           </div>
 
-          {/* Savings */}
-          {potentialSavings !== undefined && potentialSavings > 0 && (
-            <div className="p-3 bg-gradient-to-br from-brand-accent/10 to-transparent rounded-xl border border-brand-accent/20">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-brand-accent">
-                  <Database className="h-3 w-3" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">Recovery</span>
-                </div>
-                <span className="text-xs font-bold text-white">{formatBytes(potentialSavings)}</span>
-              </div>
-              <div className="h-1.5 w-full bg-brand-accent/20 rounded-full overflow-hidden">
-                <motion.div initial={{ width: 0 }} animate={{ width: '100%' }} className="h-full bg-brand-accent" />
-              </div>
-            </div>
-          )}
+          {/* Space Savings Tracker */}
+          <SpaceSavingsBar />
 
           {/* User Profile */}
-          <button onClick={onOpenSettings} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors group">
+          <button onClick={onOpenSettings} className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors group" aria-label="Open settings">
             <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-lg">
               GW
             </div>

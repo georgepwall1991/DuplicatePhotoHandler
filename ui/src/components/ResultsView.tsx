@@ -16,6 +16,7 @@ import { ActionBar } from './ActionBar'
 import { ConfirmModal } from './ConfirmModal'
 import { EmptyState } from './EmptyState'
 import { useToast } from './Toast'
+import { useSpaceSavings } from '../context/SpaceSavingsContext'
 
 interface ResultsViewProps {
   results: ScanResult
@@ -71,6 +72,7 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
   const [isRestoring, setIsRestoring] = useState(false)
   const [showImpact, setShowImpact] = useState(true)
   const { showToast } = useToast()
+  const { addSavings } = useSpaceSavings()
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Sort and filter groups
@@ -284,6 +286,21 @@ export function ResultsView({ results, onNewScan }: ResultsViewProps) {
           .filter((_, i) => i < result.trashed)
           .map(p => p.split('/').pop() || p)
         setLastTrashedFiles(filenames)
+
+        // Calculate and add recovered space
+        const recoveredBytes = paths.slice(0, result.trashed).reduce((acc, path) => {
+          for (const group of results.groups) {
+            const idx = group.photos.indexOf(path)
+            if (idx !== -1) {
+              // Estimate size per file from the group
+              return acc + Math.floor(group.duplicate_size_bytes / group.duplicate_count)
+            }
+          }
+          return acc
+        }, 0)
+        if (recoveredBytes > 0) {
+          addSavings(recoveredBytes)
+        }
       }
 
       if (result.errors.length > 0) {

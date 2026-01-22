@@ -1,5 +1,6 @@
 //! Pipeline execution implementation.
 
+use super::optimization::{prefilter_candidates, OptimizationConfig};
 use crate::core::cache::{CacheBackend, CacheEntry, InMemoryCache};
 use crate::core::comparator::{
     find_duplicate_pairs, find_duplicate_pairs_with_lsh, DuplicateGroup, LshConfig,
@@ -194,6 +195,22 @@ impl Pipeline {
         PipelineBuilder::new()
     }
 
+    /// Calculate optimal chunk size based on total photo count.
+    ///
+    /// Larger scans benefit from larger chunks to reduce SQLite transaction overhead.
+    /// - Small scans (<1000): 100 file chunks
+    /// - Medium scans (1000-5000): 250 file chunks
+    /// - Large scans (5000-10000): 500 file chunks
+    /// - Very large scans (>10000): 1000 file chunks
+    fn calculate_chunk_size(total_photos: usize) -> usize {
+        match total_photos {
+            0..=999 => 100,
+            1000..=4999 => 250,
+            5000..=9999 => 500,
+            _ => 1000,
+        }
+    }
+
     /// Run the pipeline without events
     pub fn run(&self) -> Result<PipelineResult, DuplicateFinderError> {
         self.run_with_events(&null_sender())
@@ -220,7 +237,8 @@ impl Pipeline {
         events: &EventSender,
         cancel_token: Option<&CancellationToken>,
     ) -> Result<HashingResult, DuplicateFinderError> {
-        const CHUNK_SIZE: usize = 100;
+        // Dynamic batch sizing based on total photo count
+        let chunk_size = Self::calculate_chunk_size(photos.len());
 
         let total_photos = photos.len();
         let hasher = HasherConfig::new()
@@ -234,7 +252,7 @@ impl Pipeline {
         let mut all_hashes: Vec<(PathBuf, ImageHashValue)> = Vec::with_capacity(total_photos);
 
         // Process photos in chunks for incremental cache durability
-        for chunk in photos.chunks(CHUNK_SIZE) {
+        for chunk in photos.chunks(chunk_size) {
             // Check for cancellation before processing each chunk
             if let Some(token) = cancel_token {
                 if token.load(Ordering::SeqCst) {
@@ -419,13 +437,32 @@ impl Pipeline {
             }
         }
 
-        // Phase 2: Hashing
+        // Phase 2: Optimization pre-filtering
+        let opt_config = OptimizationConfig::default();
+        let opt_result = prefilter_candidates(&photos, &opt_config);
+        let photos_to_hash = opt_result.candidates;
+        let skipped_count = opt_result.skipped_unique_size + opt_result.skipped_unique_prefix;
+
+        if skipped_count > 0 {
+            // Log optimization stats
+            events.send(Event::Hash(HashEvent::Error {
+                path: PathBuf::from("optimization"),
+                message: format!(
+                    "Optimization: skipped {} photos ({} unique size, {} unique prefix)",
+                    skipped_count, opt_result.skipped_unique_size, opt_result.skipped_unique_prefix
+                ),
+            }));
+        }
+
+        // Phase 3: Hashing
         events.send(Event::Pipeline(PipelineEvent::PhaseChanged {
             phase: PipelinePhase::Hashing,
         }));
-        events.send(Event::Hash(HashEvent::Started { total_photos }));
+        events.send(Event::Hash(HashEvent::Started {
+            total_photos: photos_to_hash.len(),
+        }));
 
-        let hash_result = self.hash_photos(&photos, events, cancel_token.as_ref())?;
+        let hash_result = self.hash_photos(&photos_to_hash, events, cancel_token.as_ref())?;
 
         events.send(Event::Hash(HashEvent::Completed {
             total_hashed: hash_result.hashes.len(),

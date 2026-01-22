@@ -181,3 +181,108 @@ body {
 .text-gradient-brand {
   @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-accent via-brand-primary to-brand-secondary;
 }
+
+/* Subtle glass variant for nested panels */
+.glass-panel-subtle {
+  @apply bg-white/[0.03] backdrop-blur-sm border border-white/5;
+}
+
+/* 
+  ------------------------
+  Skeleton Loading
+  ------------------------
+*/
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg,
+      transparent,
+      rgba(255, 255, 255, 0.04),
+      transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* 
+  ------------------------
+  Accessibility
+  ------------------------
+*/
+
+/* Visible focus rings for keyboard navigation */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-surface-950), 0 0 0 4px var(--color-brand-primary);
+  border-radius: 4px;
+}
+
+/* Focus ring for buttons and interactive elements */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-surface-950), 0 0 0 4px var(--color-brand-primary);
+}
+
+/* Skip link for screen reader users */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 0;
+  background: var(--color-brand-primary);
+  color: white;
+  padding: 0.5rem 1rem;
+  z-index: 100;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --glass-border: rgba(255, 255, 255, 0.3);
+    --color-text-secondary: oklch(0.85 0.02 260);
+    --color-text-muted: oklch(0.70 0.02 260);
+  }
+
+  .glass-card {
+    border-width: 2px;
+  }
+
+  button,
+  a {
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+}
