@@ -250,6 +250,7 @@ impl Pipeline {
     /// - Photos are processed in chunks (default: 100)
     /// - Each chunk is hashed in parallel, then cache is flushed
     /// - This provides incremental progress saving (crash recovery)
+    #[tracing::instrument(skip(self, photos, events, cancel_token), fields(total_photos = photos.len()))]
     fn hash_photos(
         &self,
         photos: &[PhotoFile],
@@ -258,6 +259,11 @@ impl Pipeline {
     ) -> Result<HashingResult, DuplicateFinderError> {
         // Dynamic batch sizing based on total photo count
         let chunk_size = Self::calculate_chunk_size(photos.len());
+        tracing::debug!(
+            "Hashing {} photos with chunk size {}",
+            photos.len(),
+            chunk_size
+        );
 
         let total_photos = photos.len();
         let hasher = HasherConfig::new()
@@ -419,11 +425,13 @@ impl Pipeline {
     }
 
     /// Internal implementation that supports optional cancellation
+    #[tracing::instrument(skip(self, events, cancel_token), fields(paths = ?self.config.paths))]
     fn run_internal(
         &self,
         events: &EventSender,
         cancel_token: Option<CancellationToken>,
     ) -> Result<PipelineResult, DuplicateFinderError> {
+        tracing::info!("Starting pipeline execution");
         let start_time = Instant::now();
         let mut errors = Vec::new();
 

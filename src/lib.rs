@@ -20,3 +20,14 @@ pub mod events;
 
 // Re-export commonly used types at the crate root
 pub use error::{DuplicateFinderError, Result};
+
+/// Initialize tracing for the library
+///
+/// This should be called by the application entry point (CLI or GUI).
+pub fn init_tracing() {
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("Failed to set global default tracing subscriber");
+}

@@ -70,18 +70,29 @@ impl Default for OptimizationConfig {
 /// 2. Prefix hash: Files with different first 4KB can't be duplicates
 ///
 /// Returns only the photos that need full hashing.
+#[tracing::instrument(skip(photos), fields(total_photos = photos.len()))]
 pub fn prefilter_candidates(
     photos: &[PhotoFile],
     config: &OptimizationConfig,
 ) -> OptimizationResult {
     // Skip optimization for small scans
     if photos.len() < config.min_photos_threshold {
+        tracing::debug!(
+            "Skipping optimization ({} photos < threshold {})",
+            photos.len(),
+            config.min_photos_threshold
+        );
         return OptimizationResult {
             candidates: photos.to_vec(),
             skipped_unique_size: 0,
             skipped_unique_prefix: 0,
         };
     }
+
+    tracing::info!(
+        "Starting optimization pre-filtering for {} photos",
+        photos.len()
+    );
 
     let mut candidates = photos.to_vec();
     let mut skipped_size = 0;
@@ -90,6 +101,7 @@ pub fn prefilter_candidates(
     // Phase 1: Size pre-filtering
     if config.size_prefilter {
         let (filtered, skipped) = filter_by_size(&candidates);
+        tracing::debug!("Size pre-filter skipped {} photos", skipped);
         skipped_size = skipped;
         candidates = filtered;
     }
@@ -97,6 +109,7 @@ pub fn prefilter_candidates(
     // Phase 2: Prefix hash filtering (only if many candidates remain)
     if config.prefix_hash && candidates.len() > 50 {
         let (filtered, skipped) = filter_by_prefix(&candidates);
+        tracing::debug!("Prefix hash filter skipped {} photos", skipped);
         skipped_prefix = skipped;
         candidates = filtered;
     }
@@ -136,34 +149,35 @@ fn filter_by_size(photos: &[PhotoFile]) -> (Vec<PhotoFile>, usize) {
 /// faster than perceptual hashing (~100x) and catches most non-duplicates.
 fn filter_by_prefix(photos: &[PhotoFile]) -> (Vec<PhotoFile>, usize) {
     // Compute prefix hashes in parallel
-    let prefix_hashes: Vec<(PathBuf, Option<u64>)> = photos
+    let prefix_hashes: Vec<(PathBuf, Result<u64, std::io::Error>)> = photos
         .par_iter()
         .map(|photo| {
-            let hash = compute_prefix_hash(&photo.path);
-            (photo.path.clone(), hash)
+            let hash_result = compute_prefix_hash(&photo.path);
+            (photo.path.clone(), hash_result)
         })
         .collect();
 
     // Group by prefix hash
     let mut prefix_groups: HashMap<u64, Vec<&PhotoFile>> = HashMap::new();
-    for (i, (_, hash_opt)) in prefix_hashes.iter().enumerate() {
-        if let Some(hash) = hash_opt {
-            prefix_groups.entry(*hash).or_default().push(&photos[i]);
+    let mut failed_paths: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+
+    for (i, (_, result)) in prefix_hashes.iter().enumerate() {
+        match result {
+            Ok(hash) => {
+                prefix_groups.entry(*hash).or_default().push(&photos[i]);
+            }
+            Err(e) => {
+                tracing::warn!("Prefix hash failed for {:?}: {}", photos[i].path, e);
+                failed_paths.insert(photos[i].path.clone());
+            }
         }
     }
 
-    // Keep only photos in groups with 2+ members, plus any that failed to hash
+    // Keep only photos in groups with 2+ members
     let candidate_paths: std::collections::HashSet<PathBuf> = prefix_groups
         .values()
         .filter(|group| group.len() >= 2)
         .flat_map(|group| group.iter().map(|p| p.path.clone()))
-        .collect();
-
-    // Also include photos that failed prefix hashing (to be safe)
-    let failed_paths: std::collections::HashSet<PathBuf> = prefix_hashes
-        .iter()
-        .filter(|(_, h)| h.is_none())
-        .map(|(p, _)| p.clone())
         .collect();
 
     let candidates: Vec<PhotoFile> = photos
@@ -177,11 +191,12 @@ fn filter_by_prefix(photos: &[PhotoFile]) -> (Vec<PhotoFile>, usize) {
 }
 
 /// Compute a fast hash of the first 4KB of a file.
-fn compute_prefix_hash(path: &std::path::Path) -> Option<u64> {
-    let mut file = File::open(path).ok()?;
+/// Compute a fast hash of the first 4KB of a file.
+fn compute_prefix_hash(path: &std::path::Path) -> std::io::Result<u64> {
+    let mut file = File::open(path)?;
     let mut buffer = [0u8; PREFIX_SIZE];
-    let bytes_read = file.read(&mut buffer).ok()?;
-    Some(xxh3_64(&buffer[..bytes_read]))
+    let bytes_read = file.read(&mut buffer)?;
+    Ok(xxh3_64(&buffer[..bytes_read]))
 }
 
 /// Two-phase progressive hasher for fusion mode.

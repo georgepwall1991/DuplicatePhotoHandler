@@ -41,6 +41,8 @@ thiserror = "2.0"
 clap = { version = "4.5", features = ["derive"] }
 indicatif = "0.18.3"
 console = "0.16.2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Serialization (GUI-ready)
 serde = { version = "1.0", features = ["derive"] }

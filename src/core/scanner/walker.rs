@@ -130,7 +130,9 @@ impl WalkDirScanner {
                 let photo = PhotoFile {
                     path: path.to_path_buf(),
                     size: metadata.len(),
-                    modified: metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+                    modified: metadata
+                        .modified()
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
                     format: self.filter.get_format(path),
                 };
                 ctx.add_photo(photo);
@@ -155,7 +157,9 @@ impl WalkDirScanner {
     /// Convert a walkdir error to a ScanError
     fn convert_walk_error(&self, error: &walkdir::Error, path: &Path) -> ScanError {
         if error.io_error().map(|e| e.kind()) == Some(std::io::ErrorKind::PermissionDenied) {
-            ScanError::PermissionDenied { path: path.to_path_buf() }
+            ScanError::PermissionDenied {
+                path: path.to_path_buf(),
+            }
         } else {
             ScanError::ReadDirectory {
                 path: path.to_path_buf(),
@@ -165,6 +169,7 @@ impl WalkDirScanner {
     }
 
     /// Scan a single directory
+    #[tracing::instrument(skip(self, events))]
     fn scan_directory(
         &self,
         root: &PathBuf,
@@ -204,11 +209,13 @@ impl PhotoScanner for WalkDirScanner {
         self.scan_with_events(paths, &crate::events::null_sender())
     }
 
+    #[tracing::instrument(skip(self, events), fields(paths = ?paths))]
     fn scan_with_events(
         &self,
         paths: &[PathBuf],
         events: &EventSender,
     ) -> Result<ScanResult, ScanError> {
+        tracing::info!("Starting directory scan of {:?} paths", paths.len());
         events.send(Event::Scan(ScanEvent::Started {
             paths: paths.to_vec(),
         }));
@@ -241,11 +248,11 @@ impl PhotoScanner for WalkDirScanner {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::ImageFormat;
-    use tempfile::TempDir;
+    use super::*;
     use std::fs::File;
     use std::io::Write;
+    use tempfile::TempDir;
 
     fn create_test_photo(dir: &TempDir, name: &str) -> PathBuf {
         let path = dir.path().join(name);

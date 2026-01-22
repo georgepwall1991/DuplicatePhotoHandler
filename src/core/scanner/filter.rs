@@ -6,7 +6,7 @@ use std::path::Path;
 /// Filters files to determine if they are supported images
 pub struct ImageFilter {
     /// File extensions to include
-    extensions: Vec<String>,
+    extensions: std::collections::HashSet<String>,
     /// Whether to include hidden files
     include_hidden: bool,
 }
@@ -26,7 +26,9 @@ impl ImageFilter {
                 "bmp".to_string(),
                 "tiff".to_string(),
                 "tif".to_string(),
-            ],
+            ]
+            .into_iter()
+            .collect(),
             include_hidden: false,
         }
     }
@@ -39,7 +41,7 @@ impl ImageFilter {
 
     /// Override the list of extensions to accept
     pub fn with_extensions(mut self, extensions: Vec<String>) -> Self {
-        self.extensions = extensions;
+        self.extensions = extensions.into_iter().collect();
         self
     }
 
@@ -57,7 +59,7 @@ impl ImageFilter {
         // Check extension
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             let ext_lower = ext.to_lowercase();
-            self.extensions.iter().any(|e| e == &ext_lower)
+            self.extensions.contains(&ext_lower)
         } else {
             false
         }
