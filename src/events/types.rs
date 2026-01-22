@@ -135,6 +135,15 @@ pub enum PipelineEvent {
     Completed { summary: PipelineSummary },
     /// Pipeline was cancelled
     Cancelled,
+    /// Optimization pre-filtering completed
+    OptimizationStats {
+        /// Photos skipped due to unique file size
+        skipped_unique_size: usize,
+        /// Photos skipped due to unique 4KB prefix
+        skipped_unique_prefix: usize,
+        /// Photos remaining for hashing
+        candidates: usize,
+    },
     /// Pipeline encountered a fatal error
     Error { message: String },
 }

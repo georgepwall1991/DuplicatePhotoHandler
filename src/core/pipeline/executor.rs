@@ -25,6 +25,21 @@ use std::time::{Instant, SystemTime};
 /// Cancellation token for stopping pipeline execution
 pub type CancellationToken = Arc<AtomicBool>;
 
+// =============================================================================
+// Constants
+// =============================================================================
+
+/// Threshold for using LSH acceleration instead of brute-force comparison.
+/// Collections larger than this use O(n log n) LSH; smaller use O(n²) pairwise.
+const LSH_THRESHOLD: usize = 500;
+
+/// Dynamic chunk sizes for batch cache operations.
+/// Larger scans benefit from larger chunks to reduce SQLite transaction overhead.
+const CHUNK_SMALL: usize = 100; // <1000 photos
+const CHUNK_MEDIUM: usize = 250; // 1000-4999 photos
+const CHUNK_LARGE: usize = 500; // 5000-9999 photos
+const CHUNK_XLARGE: usize = 1000; // 10000+ photos
+
 /// Result of the hashing phase
 struct HashingResult {
     hashes: Vec<(PathBuf, ImageHashValue)>,
@@ -39,10 +54,16 @@ struct SingleHashResult {
     cache_entry: Option<CacheEntry>,
 }
 
-/// Calculate duplicate size savings for each group
-fn calculate_group_savings(groups: &mut [DuplicateGroup], photos: &[PhotoFile]) -> u64 {
-    let photo_sizes: HashMap<_, _> = photos.iter().map(|p| (p.path.clone(), p.size)).collect();
+/// Build a lookup map of photo paths to their file sizes.
+fn build_photo_size_map(photos: &[PhotoFile]) -> HashMap<PathBuf, u64> {
+    photos.iter().map(|p| (p.path.clone(), p.size)).collect()
+}
 
+/// Calculate duplicate size savings for each group
+fn calculate_group_savings(
+    groups: &mut [DuplicateGroup],
+    photo_sizes: &HashMap<PathBuf, u64>,
+) -> u64 {
     let mut total_savings = 0u64;
     for group in groups.iter_mut() {
         let duplicate_size: u64 = group
@@ -61,15 +82,13 @@ fn calculate_group_savings(groups: &mut [DuplicateGroup], photos: &[PhotoFile]) 
 ///
 /// Strategy: Pick the largest file as it typically has the best quality/resolution.
 /// This is a fast heuristic that doesn't require expensive quality analysis.
-fn select_best_representatives(groups: &mut [DuplicateGroup], photos: &[PhotoFile]) {
-    let photo_sizes: HashMap<_, _> = photos.iter().map(|p| (&p.path, p.size)).collect();
-
+fn select_best_representatives(groups: &mut [DuplicateGroup], photo_sizes: &HashMap<PathBuf, u64>) {
     for group in groups.iter_mut() {
         // Find the photo with the largest file size
         let best = group
             .photos
             .iter()
-            .max_by_key(|p| photo_sizes.get(p).copied().unwrap_or(0))
+            .max_by_key(|p| photo_sizes.get(*p).copied().unwrap_or(0))
             .cloned();
 
         if let Some(best_photo) = best {
@@ -204,10 +223,10 @@ impl Pipeline {
     /// - Very large scans (>10000): 1000 file chunks
     fn calculate_chunk_size(total_photos: usize) -> usize {
         match total_photos {
-            0..=999 => 100,
-            1000..=4999 => 250,
-            5000..=9999 => 500,
-            _ => 1000,
+            0..=999 => CHUNK_SMALL,
+            1000..=4999 => CHUNK_MEDIUM,
+            5000..=9999 => CHUNK_LARGE,
+            _ => CHUNK_XLARGE,
         }
     }
 
@@ -441,20 +460,15 @@ impl Pipeline {
         let opt_config = OptimizationConfig::default();
         let opt_result = prefilter_candidates(&photos, &opt_config);
         let photos_to_hash = opt_result.candidates;
-        let skipped_count = opt_result.skipped_unique_size + opt_result.skipped_unique_prefix;
 
-        if skipped_count > 0 {
-            // Log optimization stats
-            events.send(Event::Hash(HashEvent::Error {
-                path: PathBuf::from("optimization"),
-                message: format!(
-                    "Optimization: skipped {} photos ({} unique size, {} unique prefix)",
-                    skipped_count, opt_result.skipped_unique_size, opt_result.skipped_unique_prefix
-                ),
-            }));
-        }
+        // Emit optimization stats event
+        events.send(Event::Pipeline(PipelineEvent::OptimizationStats {
+            skipped_unique_size: opt_result.skipped_unique_size,
+            skipped_unique_prefix: opt_result.skipped_unique_prefix,
+            candidates: photos_to_hash.len(),
+        }));
 
-        // Phase 3: Hashing
+        // Phase 3: Hashing (after optimization pre-filtering)
         events.send(Event::Pipeline(PipelineEvent::PhaseChanged {
             phase: PipelinePhase::Hashing,
         }));
@@ -462,7 +476,7 @@ impl Pipeline {
             total_photos: photos_to_hash.len(),
         }));
 
-        let hash_result = self.hash_photos(&photos_to_hash, events, cancel_token.as_ref())?;
+        let mut hash_result = self.hash_photos(&photos_to_hash, events, cancel_token.as_ref())?;
 
         events.send(Event::Hash(HashEvent::Completed {
             total_hashed: hash_result.hashes.len(),
@@ -477,7 +491,7 @@ impl Pipeline {
             }
         }
 
-        // Phase 3: Comparing
+        // Phase 4: Comparing
         events.send(Event::Pipeline(PipelineEvent::PhaseChanged {
             phase: PipelinePhase::Comparing,
         }));
@@ -489,15 +503,11 @@ impl Pipeline {
 
         // Use LSH acceleration for large collections (>500 photos)
         // This reduces O(n²) to O(n log n) - roughly 250x speedup for 10,000 photos
-        const LSH_THRESHOLD: usize = 500;
-        let matches = if hash_result.hashes.len() > LSH_THRESHOLD {
-            find_duplicate_pairs_with_lsh(
-                hash_result.hashes.clone(),
-                &strategy,
-                LshConfig::default(),
-            )
+        let hashes = std::mem::take(&mut hash_result.hashes);
+        let matches = if hashes.len() > LSH_THRESHOLD {
+            find_duplicate_pairs_with_lsh(hashes, &strategy, LshConfig::default())
         } else {
-            find_duplicate_pairs(&hash_result.hashes, &strategy)
+            find_duplicate_pairs(&hashes, &strategy)
         };
 
         let grouper = TransitiveGrouper::new();
@@ -509,10 +519,11 @@ impl Pipeline {
         }));
 
         // Select best representative for each group (largest file = best quality)
-        select_best_representatives(&mut groups, &photos);
+        let photo_sizes = build_photo_size_map(&photos);
+        select_best_representatives(&mut groups, &photo_sizes);
 
         // Calculate savings and emit summary
-        let potential_savings = calculate_group_savings(&mut groups, &photos);
+        let potential_savings = calculate_group_savings(&mut groups, &photo_sizes);
         let duration_ms = start_time.elapsed().as_millis() as u64;
 
         events.send(Event::Pipeline(PipelineEvent::Completed {
@@ -737,7 +748,8 @@ mod tests {
             duplicate_size_bytes: 0, // Will be calculated
         }];
 
-        let savings = calculate_group_savings(&mut groups, &photos);
+        let photo_sizes = build_photo_size_map(&photos);
+        let savings = calculate_group_savings(&mut groups, &photo_sizes);
 
         // Should calculate savings as size of duplicates (not representative)
         // In a group of 2 identical files of 1000 bytes, savings = 1000 bytes (one duplicate)
